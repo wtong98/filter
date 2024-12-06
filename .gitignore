@@ -1,0 +1,10 @@
+__pycache__/
+*.png
+*.svg
+*.pkl
+fig/
+task/dataset/
+
+# ignore slurm logging outputs
+*.err
+*.out
