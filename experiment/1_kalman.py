@@ -65,18 +65,18 @@ pred_naive = xs[:,:-1]
 xs = xs[:,1:]
 pred = pred[:,:-1]
 
-pred_mse = np.mean((xs - pred)**2, axis=[0, -1])
-naive_mse = np.mean((xs - pred_naive)**2, axis=[0, -1])
-zero_mse = np.mean(xs**2, axis=0)
+pred_mse = ((xs - pred)**2).mean(axis=(0, -1))
+naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
+zero_mse = (xs**2).mean(axis=(0, -1))
 
-plt.plot(pred_mse, '--o')
-plt.plot(naive_mse, '--o')
-plt.plot(zero_mse, '--o')
+plt.plot(pred_mse, '--o', label='pred')
+plt.plot(naive_mse, '--o', label='naive')
+plt.plot(zero_mse, '--o', label='zero')
 
+plt.legend()
 # plt.yscale('log')
 
 
 # <codecell>
-
-plt.plot(xs[0], '--o')
-plt.plot(pred[0], '--o')
+plt.plot(xs[0].mean(axis=-1), '--o')
+plt.plot(pred[0].mean(axis=-1), '--o')

@@ -30,15 +30,15 @@ n_dims = 128
 length = 64
 
 ### START TEST CONFIGS
-n_dims = 16
-length = 8
+# n_dims = 16
+# length = 8
 
-run_split = 1
+# run_split = 1
 
-train_iters = 50
-n_layers = [1]
-n_widths = [512]
-n_heads = [1]
+# train_iters = 50
+# n_layers = [1]
+# n_widths = [512]
+# n_heads = [1]
 ### END TEST CONFIGS
 
 all_cases = []

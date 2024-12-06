@@ -217,9 +217,9 @@ class Case:
         xs = xs[:,1:]
         pred = pred[:,:-1]
 
-        pred_mse = np.mean((xs - pred)**2, axis=[0, -1])
-        naive_mse = np.mean((xs - pred_naive)**2, axis=[0, -1])
-        zero_mse = np.mean(xs**2, axis=0)
+        pred_mse = ((xs - pred)**2).mean(axis=(0, -1))
+        naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
+        zero_mse = (xs**2).mean(axis=(0, -1))
 
         self.info['pred_mse'] = pred_mse
         self.info['naive_mse'] = naive_mse
