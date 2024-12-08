@@ -20,14 +20,14 @@ print('RUN ID', run_id)
 
 run_split = 12
 
-train_iters = 50_000
-n_layers = [1, 2, 4, 8]
+train_iters = 25_000
+n_layers = [1, 2, 4]
 n_widths = [512, 1024, 2048, 4096]
-n_heads = [1, 2, 4, 8]
+n_heads = [1, 2, 4]
 matrix_dist = ['orthogonal']
 
-n_dims = 128
-length = 64
+n_dims = 32
+length = 16
 
 ### START TEST CONFIGS
 # n_dims = 16

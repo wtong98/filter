@@ -20,6 +20,38 @@ from train import *
 from model.transformer import TransformerConfig 
 from task.filter import KalmanFilterTask
 
+# <codecell>
+df = collate_dfs('remote/1_kalman/generalize')
+df
+
+# <codecell>
+def extract_plot_vals(row):
+    time_len = len(row['info']['pred_mse'])
+    return pd.Series([
+        row['name'],
+        row['config']['n_layers'],
+        row['config']['n_hidden'],
+        row['config']['n_heads'],
+        row['info']['pred_mse'],
+        row['info']['naive_mse'],
+        row['info']['zero_mse'],
+        np.arange(time_len)
+    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'pred_mse', 'naive_mse', 'zero_mse', 'time'])
+
+plot_df = df.apply(extract_plot_vals, axis=1) \
+            .reset_index(drop=True) \
+            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'time']) \
+            .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'time'], var_name='mse_type', value_name='mse')
+plot_df['mse'] = plot_df['mse'].astype(float)
+
+# <codecell>
+mdf = plot_df[plot_df['n_heads'] == 2]
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', row='n_layers', col='n_hidden', kind='line', marker='o', alpha=0.5)
+gs.set(yscale='log')
+
+plt.savefig('fig/filter.png')
+
+# <codecell>
 length = 16
 n_dims = 32
 
