@@ -24,7 +24,6 @@ train_iters = 25_000
 n_layers = [1, 2, 4]
 n_widths = [512, 1024, 2048, 4096]
 n_heads = [1, 2, 4]
-matrix_dist = ['orthogonal']
 
 n_dims = 32
 length = 16
@@ -43,7 +42,7 @@ length = 16
 
 all_cases = []
 
-for n_head, n_width, n_layer, m_dist in itertools.product(n_heads, n_widths, n_layers, matrix_dist):
+for n_head, n_width, n_layer in itertools.product(n_heads, n_widths, n_layers):
     all_cases.extend([
         Case('Transformer',
             TransformerConfig(n_layers=n_layer,
@@ -57,8 +56,8 @@ for n_head, n_width, n_layer, m_dist in itertools.product(n_heads, n_widths, n_l
                             return_final_logits_only=False,
                             n_out=n_dims),
             train_args={'train_iters': train_iters, 'test_iters': 1, 'test_every': 1000},
-            train_task=KalmanFilterTask(length=length, n_dims=n_dims, matrix_dist=matrix_dist),
-            test_task=KalmanFilterTask(length=length, n_dims=n_dims, matrix_dist=matrix_dist, batch_size=1024),
+            train_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25),
+            test_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, batch_size=1024),
         )
     ])
 
