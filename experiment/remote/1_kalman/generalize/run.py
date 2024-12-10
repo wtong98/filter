@@ -43,6 +43,7 @@ length = 16
 all_cases = []
 
 for n_head, n_width, n_layer in itertools.product(n_heads, n_widths, n_layers):
+    seed = new_seed()
     all_cases.extend([
         Case('Transformer',
             TransformerConfig(n_layers=n_layer,
@@ -56,8 +57,8 @@ for n_head, n_width, n_layer in itertools.product(n_heads, n_widths, n_layers):
                             return_final_logits_only=False,
                             n_out=n_dims),
             train_args={'train_iters': train_iters, 'test_iters': 1, 'test_every': 1000},
-            train_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25),
-            test_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, batch_size=1024),
+            train_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed),
+            test_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, batch_size=1024, seed=seed),
         )
     ])
 

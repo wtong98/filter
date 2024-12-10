@@ -45,19 +45,20 @@ plot_df = df.apply(extract_plot_vals, axis=1) \
 plot_df['mse'] = plot_df['mse'].astype(float)
 
 # <codecell>
-mdf = plot_df[plot_df['n_hidden'] == 512]
+mdf = plot_df[plot_df['n_hidden'] == 2048]
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', row='n_layers', col='n_heads', kind='line', marker='o', alpha=0.5, height=3)
 gs.set(yscale='log')
 
-plt.savefig('fig/filter.png')
+# plt.savefig('fig/filter_noise.png')
 
 # <codecell>
 length = 16
 n_dims = 32
 
-train_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=1, o_noise=1)
-test_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=1, o_noise=1)
+seed = new_seed()
+train_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
+test_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
 
 
 config = TransformerConfig(n_layers=4,

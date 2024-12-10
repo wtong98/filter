@@ -7,16 +7,19 @@ from scipy.stats import special_ortho_group
 
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, t_noise=0.05, o_noise=0.05, batch_size=128) -> None:
+    def __init__(self, length=8, n_dims=8, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
         self.t_noise = t_noise
         self.o_noise = o_noise
         self.batch_size = batch_size
+        self.seed = seed
 
-        self.t_mat = np.random.randn(self.n_dims, self.n_dims) 
+        self.rng = np.random.default_rng(self.seed)
+
+        self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
         self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2)
-        self.o_mat = np.random.randn(self.n_dims, self.n_dims) / np.sqrt(n_dims)
+        self.o_mat = self.rng.standard_normal((self.n_dims, self.n_dims)) / np.sqrt(n_dims)
     
 
     def __next__(self):
@@ -36,6 +39,7 @@ class KalmanFilterTask:
 
 # task = KalmanFilterTask(length=30, n_dims=100, batch_size=10)
 # xs = next(task)
+# xs.shape
 
 # xs = np.linalg.norm(xs, axis=-1)
 # plt.plot(xs.T, '--o')
