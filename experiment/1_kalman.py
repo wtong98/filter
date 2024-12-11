@@ -18,15 +18,54 @@ sys.path.append('../')
 from common import *
 from train import *
 from model.transformer import TransformerConfig 
-from task.filter import KalmanFilterTask
+from task.filter import KalmanFilterTask, pred_kalman
 
 # <codecell>
 df = collate_dfs('remote/1_kalman/generalize')
 df
 
 # <codecell>
+def pred_kalman(xs, task):
+    I = np.eye(task.n_dims)
+    A = task.t_mat
+    C = task.o_mat
+    S_u = I * task.t_noise / task.n_dims
+    S_w = I * task.o_noise / task.n_dims
+
+    ba = np.zeros((task.n_dims, task.batch_size))
+    Sa = S_u.copy()
+
+    preds = []
+
+    # begin loop
+    for i in range(xs.shape[1]):
+        y = xs[:,i].T
+
+        L = Sa @ C.T @ np.linalg.pinv(C @ Sa @ C.T + S_w)
+        bp = (I - L @ C) @ ba + L @ y
+        Sp = (I - L @ C) @ Sa
+
+        ba = A @ bp
+        Sa = A @ Sp @ A.T + S_u
+
+        obs = C @ ba
+        preds.append(obs.T)
+
+    preds = np.stack(preds, axis=1)
+    return preds
+
+
 def extract_plot_vals(row):
     time_len = len(row['info']['pred_mse'])
+
+    task = row['test_task']
+    xs = next(task)
+    kalman_preds = pred_kalman(xs, task)
+
+    xs = xs[:,1:]
+    kalman_preds = kalman_preds[:,:-1]
+    kalman_mse = ((xs - kalman_preds)**2).mean(axis=(0, -1))
+
     return pd.Series([
         row['name'],
         row['config']['n_layers'],
@@ -35,22 +74,40 @@ def extract_plot_vals(row):
         row['info']['pred_mse'],
         row['info']['naive_mse'],
         row['info']['zero_mse'],
+        kalman_mse,
         np.arange(time_len)
-    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'pred_mse', 'naive_mse', 'zero_mse', 'time'])
+    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time'])
 
 plot_df = df.apply(extract_plot_vals, axis=1) \
             .reset_index(drop=True) \
-            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'time']) \
+            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time']) \
             .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'time'], var_name='mse_type', value_name='mse')
 plot_df['mse'] = plot_df['mse'].astype(float)
 
+
 # <codecell>
-mdf = plot_df[plot_df['n_hidden'] == 2048]
+mdf = plot_df[plot_df['n_hidden'] == 512]
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', row='n_layers', col='n_heads', kind='line', marker='o', alpha=0.5, height=3)
 gs.set(yscale='log')
 
 # plt.savefig('fig/filter_noise.png')
+
+# <codecell>
+task = KalmanFilterTask(length=16, n_dims=32, t_noise=0.25, o_noise=0.25)
+task = df.iloc[0].test_task
+
+xs = next(task)
+preds = pred_kalman(xs, task)
+
+xs = xs[:,1:]
+preds = preds[:,:-1]
+
+k_mse = ((xs - preds)**2).mean(axis=(0, -1))
+z_mse = ((xs)**2).mean(axis=(0, -1))
+
+print(k_mse)
+print(z_mse)
 
 # <codecell>
 length = 16
@@ -61,11 +118,11 @@ train_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_nois
 test_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
 
 
-config = TransformerConfig(n_layers=4,
-                           n_hidden=1024,
+config = TransformerConfig(n_layers=1,
+                           n_hidden=512,
                            pos_emb=True,
                            n_mlp_layers=2,
-                           n_heads=4,
+                           n_heads=1,
                            layer_norm=True,
                            residual_connections=True,
                            freeze_emb=False,
@@ -88,6 +145,9 @@ state, hist = train(config,
                     seed=None)
 
 # <codecell>
+train_task.batch_size = 1024
+train_task.length = 64
+
 xs = next(train_task)
 pred = state.apply_fn({'params': state.params}, xs)
 
@@ -96,19 +156,32 @@ pred = state.apply_fn({'params': state.params}, xs)
 # pred = np.linalg.norm(pred, axis=-1)
 
 pred_naive = xs[:,:-1]
-xs = xs[:,1:]
 pred = pred[:,:-1]
+
+pred_k = pred_kalman(xs, train_task)
+pred_k = pred_k[:,:-1]
+
+xs = xs[:,1:]
 
 pred_mse = ((xs - pred)**2).mean(axis=(0, -1))
 naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
 zero_mse = (xs**2).mean(axis=(0, -1))
+kalman_mse = ((xs - pred_k)**2).mean(axis=(0, -1))
 
-plt.plot(pred_mse, '--o', label='pred')
-plt.plot(naive_mse, '--o', label='naive')
-plt.plot(zero_mse, '--o', label='zero')
+plt.plot(pred_mse, '--o', label='pred', alpha=0.7)
+plt.plot(naive_mse, '--o', label='naive', alpha=0.7)
+plt.plot(zero_mse, '--o', label='zero', alpha=0.7)
+plt.plot(kalman_mse, '--o', label='kalman', alpha=0.7)
+
+plt.axvline(x=15, linestyle='dashed', color='gray')
 
 plt.legend()
 plt.yscale('log')
+plt.xlabel('time')
+plt.ylabel('mse')
+plt.tight_layout()
+
+plt.savefig('fig/extrapolation.png')
 
 
 # <codecell>
