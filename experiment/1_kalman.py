@@ -25,40 +25,11 @@ df = collate_dfs('remote/1_kalman/generalize')
 df
 
 # <codecell>
-def pred_kalman(xs, task):
-    I = np.eye(task.n_dims)
-    A = task.t_mat
-    C = task.o_mat
-    S_u = I * task.t_noise / task.n_dims
-    S_w = I * task.o_noise / task.n_dims
-
-    ba = np.zeros((task.n_dims, task.batch_size))
-    Sa = S_u.copy()
-
-    preds = []
-
-    # begin loop
-    for i in range(xs.shape[1]):
-        y = xs[:,i].T
-
-        L = Sa @ C.T @ np.linalg.pinv(C @ Sa @ C.T + S_w)
-        bp = (I - L @ C) @ ba + L @ y
-        Sp = (I - L @ C) @ Sa
-
-        ba = A @ bp
-        Sa = A @ Sp @ A.T + S_u
-
-        obs = C @ ba
-        preds.append(obs.T)
-
-    preds = np.stack(preds, axis=1)
-    return preds
-
-
 def extract_plot_vals(row):
     time_len = len(row['info']['pred_mse'])
 
     task = row['test_task']
+    task.n_tasks = 1
     xs = next(task)
     kalman_preds = pred_kalman(xs, task)
 
@@ -86,12 +57,62 @@ plot_df['mse'] = plot_df['mse'].astype(float)
 
 
 # <codecell>
-mdf = plot_df[plot_df['n_hidden'] == 512]
+mdf = plot_df[plot_df['n_hidden'] == 2048]
+mdf = mdf[mdf['mse_type'] != 'naive_mse']
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', row='n_layers', col='n_heads', kind='line', marker='o', alpha=0.5, height=3)
 gs.set(yscale='log')
 
-# plt.savefig('fig/filter_noise.png')
+plt.savefig('fig/filter_noise_var_mat.png')
+
+
+# <codecell>
+df = collate_dfs('remote/1_kalman/sweep_lo_dim')
+df
+
+# <codecell>
+def extract_plot_vals(row):
+    time_len = len(row['info']['pred_mse'])
+
+    task = row['test_task']
+    task.n_tasks = 1
+    xs = next(task)
+    kalman_preds = pred_kalman(xs, task)
+
+    xs = xs[:,1:]
+    kalman_preds = kalman_preds[:,:-1]
+    kalman_mse = ((xs - kalman_preds)**2).mean(axis=(0, -1))
+
+    return pd.Series([
+        row['name'],
+        row['config']['n_layers'],
+        row['config']['n_hidden'],
+        row['config']['n_heads'],
+        row['train_task'].n_obs_dims,
+        row['train_task'].n_tasks,
+        row['info']['pred_mse'],
+        row['info']['naive_mse'],
+        row['info']['zero_mse'],
+        kalman_mse,
+        np.arange(time_len)
+    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'n_obs_dims', 'n_tasks', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time'])
+
+plot_df = df.apply(extract_plot_vals, axis=1) \
+            .reset_index(drop=True) \
+            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time']) \
+            .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'n_obs_dims', 'n_tasks', 'time'], var_name='mse_type', value_name='mse')
+plot_df['mse'] = plot_df['mse'].astype(float)
+plot_df
+
+# <codecell>
+mdf = plot_df.copy()
+mdf = mdf[(mdf['n_tasks'] == 1) & (mdf['mse_type'] != 'naive_mse')] 
+
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_obs_dims', kind='line', marker='o', alpha=0.5, height=3)
+gs.set(yscale='log')
+
+plt.savefig('fig/low_obs_dim.png')
 
 # <codecell>
 task = KalmanFilterTask(length=16, n_dims=32, t_noise=0.25, o_noise=0.25)
@@ -114,13 +135,13 @@ length = 16
 n_dims = 32
 
 seed = new_seed()
-train_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
-test_task = KalmanFilterTask(length=length, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
+train_task = KalmanFilterTask(length=length, n_tasks=1, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
+test_task = KalmanFilterTask(length=length, n_tasks=1, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
 
 
 config = TransformerConfig(n_layers=1,
                            n_hidden=512,
-                           pos_emb=True,
+                           pos_emb=False,
                            n_mlp_layers=2,
                            n_heads=1,
                            layer_norm=True,
@@ -181,7 +202,7 @@ plt.xlabel('time')
 plt.ylabel('mse')
 plt.tight_layout()
 
-plt.savefig('fig/extrapolation.png')
+plt.savefig('fig/extrapolation_nope.png')
 
 
 # <codecell>

@@ -30,6 +30,10 @@ class KalmanFilterTask:
     
 
     def __next__(self):
+        # temporary fix
+        if not hasattr(self, 'n_obs_dims'):
+            self.n_obs_dims = self.n_dims
+
         zs = np.random.randn(self.batch_size, self.n_dims, 1) / np.sqrt(self.n_dims)
 
         t_mat = self.t_mat

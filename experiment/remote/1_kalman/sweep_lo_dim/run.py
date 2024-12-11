@@ -18,7 +18,7 @@ from task.filter import KalmanFilterTask
 run_id = new_seed()
 print('RUN ID', run_id)
 
-run_split = 4
+run_split = 1
 
 train_iters = 25_000
 n_layers = [1]
@@ -27,8 +27,8 @@ n_heads = [1]
 
 n_tasks = [1, None]
 
-n_dims = 32
-n_obs_dims = [32, 16, 8, 4, 2]
+n_dims = 128
+n_obs_dims = [128, 64, 32, 16]
 
 length = 16
 
