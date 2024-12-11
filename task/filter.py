@@ -7,9 +7,10 @@ from scipy.stats import special_ortho_group
 
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, n_tasks=None, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
+    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=None, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
+        self.n_obs_dims = n_obs_dims
         self.n_tasks = n_tasks
         self.t_noise = t_noise
         self.o_noise = o_noise
@@ -18,9 +19,12 @@ class KalmanFilterTask:
 
         self.rng = np.random.default_rng(self.seed)
 
+        if self.n_obs_dims is None:
+            self.n_obs_dims = self.n_dims
+
         self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
         self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2)
-        self.o_mat = self.rng.standard_normal((self.n_dims, self.n_dims)) / np.sqrt(n_dims)
+        self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims)
 
         self.rng = np.random.default_rng(None)
     
@@ -34,11 +38,11 @@ class KalmanFilterTask:
         if self.n_tasks is None:
             t_mat = self.rng.standard_normal((self.batch_size, self.n_dims, self.n_dims))
             t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2, keepdims=True)
-            o_mat = self.rng.standard_normal((self.batch_size, self.n_dims, self.n_dims)) / np.sqrt(self.n_dims)
+            o_mat = self.rng.standard_normal((self.batch_size, self.n_obs_dims, self.n_dims)) / np.sqrt(self.n_dims)
 
         xs_all = []
         for _ in range(self.length):
-            xs = o_mat @ zs + np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.o_noise / self.n_dims)
+            xs = o_mat @ zs + np.random.randn(self.batch_size, self.n_obs_dims, 1) * np.sqrt(self.o_noise / self.n_obs_dims)
             zs = t_mat @ zs + np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.t_noise / self.n_dims)
             xs_all.append(xs)
         
@@ -49,20 +53,22 @@ class KalmanFilterTask:
         return self
 
 
-# task = KalmanFilterTask(batch_size=5, n_tasks=None)
+# task = KalmanFilterTask(batch_size=5, n_tasks=None, n_obs_dims=3)
 # xs = next(task)
 
 # plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
 
+# xs.shape
+
 # <codecell>
-
-
 def pred_kalman(xs, task):
     I = np.eye(task.n_dims)
+    Io = np.eye(task.n_obs_dims)
+
     A = task.t_mat
     C = task.o_mat
     S_u = I * task.t_noise / task.n_dims
-    S_w = I * task.o_noise / task.n_dims
+    S_w = Io * task.o_noise / task.n_obs_dims
 
     ba = np.zeros((task.n_dims, task.batch_size))
     Sa = S_u.copy()
@@ -86,7 +92,7 @@ def pred_kalman(xs, task):
     preds = np.stack(preds, axis=1)
     return preds
 
-# task = KalmanFilterTask(t_noise=0.25, o_noise=0.25)
+# task = KalmanFilterTask(t_noise=0.25, o_noise=0.25, n_obs_dims=2, n_tasks=1)
 # xs = next(task)
 # preds = pred_kalman(xs, task)
 
