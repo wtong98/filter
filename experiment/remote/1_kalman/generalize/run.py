@@ -22,11 +22,12 @@ run_split = 12
 
 train_iters = 25_000
 n_layers = [1, 2, 4]
-n_widths = [512, 1024, 2048, 4096]
-n_heads = [1, 2, 4]
+n_widths = [2048]
+n_heads = [1, 2]
 
-noises = [0.001, 0.01, 0.1]
-lengths = [4, 8, 16, 32]
+noises = [0.001, 0.1]
+lengths = [4, 8, 16]
+max_svals = [1, 1.5, 2]
 
 n_dims = 32
 
@@ -44,7 +45,7 @@ n_dims = 32
 
 all_cases = []
 
-for noise, n_head, n_width, n_layer, length in itertools.product(noises, n_heads, n_widths, n_layers, lengths):
+for max_sval, noise, n_head, n_width, n_layer, length in itertools.product(max_svals, noises, n_heads, n_widths, n_layers, lengths):
     seed = new_seed()
     all_cases.extend([
         Case('Transformer',
@@ -59,8 +60,8 @@ for noise, n_head, n_width, n_layer, length in itertools.product(noises, n_heads
                             return_final_logits_only=False,
                             n_out=n_dims),
             train_args={'train_iters': train_iters, 'test_iters': 1, 'test_every': 1000},
-            train_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed),
-            test_task=KalmanFilterTask(length=length, n_dims=n_dims, t_noise=noise, o_noise=noise, batch_size=1024, seed=seed),
+            train_task=KalmanFilterTask(length=length, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, seed=seed),
+            test_task=KalmanFilterTask(length=length, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, batch_size=1024, seed=seed),
         )
     ])
 

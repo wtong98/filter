@@ -28,7 +28,7 @@ n_heads = [1]
 n_tasks = [1, None]
 
 n_dims = 128
-n_obs_dims = [128, 64, 32, 16]
+n_obs_dims = [128, 96, 64, 48, 32]
 
 length = 16
 

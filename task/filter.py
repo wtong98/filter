@@ -7,11 +7,12 @@ from scipy.stats import special_ortho_group
 
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=None, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
+    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=None, max_sval=1, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
         self.n_obs_dims = n_obs_dims
         self.n_tasks = n_tasks
+        self.max_sval = max_sval
         self.t_noise = t_noise
         self.o_noise = o_noise
         self.batch_size = batch_size
@@ -23,8 +24,9 @@ class KalmanFilterTask:
             self.n_obs_dims = self.n_dims
 
         self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
-        self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2)
+        self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
         self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims)
+        # self.o_mat = np.eye(self.n_obs_dims)[None]
 
         self.rng = np.random.default_rng(None)
     
@@ -41,8 +43,10 @@ class KalmanFilterTask:
 
         if self.n_tasks is None:
             t_mat = self.rng.standard_normal((self.batch_size, self.n_dims, self.n_dims))
-            t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2, keepdims=True)
+            t_mat = t_mat / np.linalg.norm(t_mat, ord=2, keepdims=True, axis=(-2, -1)) * self.max_sval
+            # print(np.linalg.norm(t_mat, ord=2, axis=(-2, -1)))
             o_mat = self.rng.standard_normal((self.batch_size, self.n_obs_dims, self.n_dims)) / np.sqrt(self.n_dims)
+            # o_mat = np.repeat(np.eye(self.n_obs_dims)[None], self.batch_size, axis=0)
 
         xs_all = []
         for _ in range(self.length):
@@ -57,10 +61,10 @@ class KalmanFilterTask:
         return self
 
 
-# task = KalmanFilterTask(batch_size=5, n_tasks=None, n_obs_dims=3)
-# xs = next(task)
+task = KalmanFilterTask(max_sval=1.5, length=16, batch_size=32, n_tasks=None, n_obs_dims=None, o_noise=0.001, t_noise=0.001)
+xs = next(task)
 
-# plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
+plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
 
 # xs.shape
 

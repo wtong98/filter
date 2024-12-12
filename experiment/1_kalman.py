@@ -42,28 +42,33 @@ def extract_plot_vals(row):
         row['config']['n_layers'],
         row['config']['n_hidden'],
         row['config']['n_heads'],
+        row['train_task'].t_noise,
+        row['train_task'].length,
         row['info']['pred_mse'],
         row['info']['naive_mse'],
         row['info']['zero_mse'],
         kalman_mse,
         np.arange(time_len)
-    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time'])
+    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'noise', 'length', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time'])
 
 plot_df = df.apply(extract_plot_vals, axis=1) \
             .reset_index(drop=True) \
             .explode(['pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time']) \
-            .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'time'], var_name='mse_type', value_name='mse')
+            .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'noise', 'length', 'time'], var_name='mse_type', value_name='mse')
 plot_df['mse'] = plot_df['mse'].astype(float)
 
+plot_df
 
 # <codecell>
 mdf = plot_df[plot_df['n_hidden'] == 2048]
-mdf = mdf[mdf['mse_type'] != 'naive_mse']
+mdf = mdf[(mdf['mse_type'] != 'naive_mse')
+          & (mdf['noise'] == 0.001)
+          & (mdf['length'] == 4)]
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', row='n_layers', col='n_heads', kind='line', marker='o', alpha=0.5, height=3)
 gs.set(yscale='log')
 
-plt.savefig('fig/filter_noise_var_mat.png')
+# plt.savefig('fig/filter_noise_var_mat.png')
 
 
 # <codecell>
@@ -109,10 +114,10 @@ mdf = plot_df.copy()
 mdf = mdf[(mdf['n_tasks'] == 1) & (mdf['mse_type'] != 'naive_mse')] 
 
 
-gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_obs_dims', kind='line', marker='o', alpha=0.5, height=3)
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_obs_dims', kind='line', marker='o', alpha=0.5, height=3, facet_kws={'sharey': False})
 gs.set(yscale='log')
 
-plt.savefig('fig/low_obs_dim.png')
+plt.savefig('fig/low_obs_dim_diff_y.png')
 
 # <codecell>
 task = KalmanFilterTask(length=16, n_dims=32, t_noise=0.25, o_noise=0.25)
@@ -134,12 +139,14 @@ print(z_mse)
 length = 16
 n_dims = 32
 
+noise = 0.001
+
 seed = new_seed()
-train_task = KalmanFilterTask(length=length, n_tasks=1, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
-test_task = KalmanFilterTask(length=length, n_tasks=1, n_dims=n_dims, t_noise=0.25, o_noise=0.25, seed=seed)
+train_task = KalmanFilterTask(length=length, n_tasks=None, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed)
+test_task = KalmanFilterTask(length=length, n_tasks=None, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed)
 
 
-config = TransformerConfig(n_layers=1,
+config = TransformerConfig(n_layers=4,
                            n_hidden=512,
                            pos_emb=False,
                            n_mlp_layers=2,
@@ -166,8 +173,9 @@ state, hist = train(config,
                     seed=None)
 
 # <codecell>
+train_task.n_tasks = None
 train_task.batch_size = 1024
-train_task.length = 64
+train_task.length = 16
 
 xs = next(train_task)
 pred = state.apply_fn({'params': state.params}, xs)
@@ -179,7 +187,10 @@ pred = state.apply_fn({'params': state.params}, xs)
 pred_naive = xs[:,:-1]
 pred = pred[:,:-1]
 
-pred_k = pred_kalman(xs, train_task)
+train_task.n_tasks = 1
+xs_k = next(train_task)
+pred_k = pred_kalman(xs_k, train_task)
+xs_k = xs_k[:,1:]
 pred_k = pred_k[:,:-1]
 
 xs = xs[:,1:]
@@ -187,10 +198,10 @@ xs = xs[:,1:]
 pred_mse = ((xs - pred)**2).mean(axis=(0, -1))
 naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
 zero_mse = (xs**2).mean(axis=(0, -1))
-kalman_mse = ((xs - pred_k)**2).mean(axis=(0, -1))
+kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
 
 plt.plot(pred_mse, '--o', label='pred', alpha=0.7)
-plt.plot(naive_mse, '--o', label='naive', alpha=0.7)
+# plt.plot(naive_mse, '--o', label='naive', alpha=0.7)
 plt.plot(zero_mse, '--o', label='zero', alpha=0.7)
 plt.plot(kalman_mse, '--o', label='kalman', alpha=0.7)
 
@@ -202,7 +213,7 @@ plt.xlabel('time')
 plt.ylabel('mse')
 plt.tight_layout()
 
-plt.savefig('fig/extrapolation_nope.png')
+# plt.savefig('fig/extrapolation_nope.png')
 
 
 # <codecell>
