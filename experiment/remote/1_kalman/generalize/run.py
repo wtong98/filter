@@ -18,16 +18,16 @@ from task.filter import KalmanFilterTask
 run_id = new_seed()
 print('RUN ID', run_id)
 
-run_split = 12
+run_split = 4
 
 train_iters = 25_000
-n_layers = [1, 2, 4]
+n_layers = [1]
 n_widths = [2048]
-n_heads = [1, 2]
+n_heads = [1]
 
-noises = [0.001, 0.1]
-lengths = [4, 8, 16]
-max_svals = [1, 1.5, 2]
+noises = [0.001, 0.01, 0.1, 1]
+lengths = [16]
+max_svals = [1]
 
 n_dims = 32
 
@@ -41,6 +41,10 @@ n_dims = 32
 # n_layers = [1]
 # n_widths = [512]
 # n_heads = [1]
+
+# noises = [0.001]
+# lengths = [16]
+# max_svals = [1]
 ### END TEST CONFIGS
 
 all_cases = []
@@ -51,11 +55,11 @@ for max_sval, noise, n_head, n_width, n_layer, length in itertools.product(max_s
         Case('Transformer',
             TransformerConfig(n_layers=n_layer,
                             n_hidden=n_width,
-                            pos_emb=True,
-                            n_mlp_layers=2,
+                            pos_emb=False,
+                            n_mlp_layers=0,
                             n_heads=n_head,
-                            layer_norm=True,
-                            residual_connections=True,
+                            layer_norm=False,
+                            residual_connections=False,
                             freeze_emb=False,
                             return_final_logits_only=False,
                             n_out=n_dims),
@@ -72,9 +76,13 @@ for case in tqdm(all_cases):
     case.run()
 
 test_tasks = [c.test_task for c in all_cases]
+for task in test_tasks:
+    task.length = 64
+
 eval_cases(all_cases, eval_task=test_tasks)
 
 for case in all_cases:
+    case.info['params'] = case.state.params
     case.state = None
     case.hist = None
 

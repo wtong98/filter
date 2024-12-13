@@ -125,9 +125,9 @@ class SimpleSelfAttention(nn.Module):
     config: TransformerConfig
 
     @nn.compact
-    def __call__(self, inputs):
+    def __call__(self, inputs, mask=None):
         self.sow('intermediates', 'inputs', inputs)
-        
+
         n_feats = inputs.shape[-1]
         n_heads = self.config.n_heads
         assert n_feats % n_heads == 0
@@ -139,6 +139,10 @@ class SimpleSelfAttention(nn.Module):
 
         query = query / jnp.sqrt(head_dim)
         attn_weights = jnp.einsum('...qhd,...khd->...hqk', query, key)
+
+        if mask is not None:
+            attn_weights = jnp.where(mask, attn_weights, 0)   # linear mode
+
         # attn_weights = jax.nn.softmax(attn_weights, axis=-1)
 
         self.sow('intermediates', 'attention_weights', attn_weights)
@@ -160,7 +164,7 @@ class TransformerBlock(nn.Module):
         assert inputs.ndim == 3
 
         if self.config.use_simple_att:
-            x = SimpleSelfAttention(config=self.config)(inputs)
+            x = SimpleSelfAttention(config=self.config)(inputs, mask=decoder_mask)
         else:
             x = nn.MultiHeadDotProductAttention(num_heads=self.config.n_heads, 
                                                 qkv_features=self.config.n_hidden)(inputs_q=inputs, inputs_kv=inputs, mask=decoder_mask, sow_weights=True)

@@ -7,7 +7,7 @@ from scipy.stats import special_ortho_group
 
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=None, max_sval=1, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
+    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=1, max_sval=1, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
         self.n_obs_dims = n_obs_dims
@@ -61,10 +61,10 @@ class KalmanFilterTask:
         return self
 
 
-task = KalmanFilterTask(max_sval=1.5, length=16, batch_size=32, n_tasks=None, n_obs_dims=None, o_noise=0.001, t_noise=0.001)
-xs = next(task)
+# task = KalmanFilterTask(max_sval=1.5, length=16, batch_size=32, n_tasks=None, n_obs_dims=None, o_noise=0.001, t_noise=0.001)
+# xs = next(task)
 
-plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
+# plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
 
 # xs.shape
 
