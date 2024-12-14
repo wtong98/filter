@@ -20,11 +20,11 @@ print('RUN ID', run_id)
 
 run_split = 12
 
-train_iters = 10_000
+train_iters = 5_000
 # n_layers = [1, 2, 4]
 n_layers = [1]
 n_widths = [2048]
-# n_heads = [1, 2, 4]
+# n_heads = [1, 2]
 n_heads = [1]
 
 noises = [0.1, 0.25, 0.5, 1]

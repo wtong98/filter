@@ -209,7 +209,7 @@ gs.set_ylabels('MSE')
 gs.set_titles("{row_name} Layers, {col_name} Heads")
 
 gs.legend.set_title(None)
-plt.savefig('fig/head_layer_sweep.png')
+# plt.savefig('fig/head_layer_sweep.png')
 
 
 # <codecell>
@@ -224,6 +224,7 @@ mdf = mdf[(mdf['mse_type'] != 'naive_mse')
           & (mdf['time'] > 0)
           & (mdf['n_layers'] == 1)
           & (mdf['n_heads'] == 1)
+          & (mdf['n_tasks'] == 1)
           ]
 
 mdf = mdf.replace({
@@ -262,6 +263,7 @@ mdf = mdf[(mdf['mse_type'] != 'naive_mse')
           & (mdf['time'] > 0)
           & (mdf['n_layers'] == 1)
           & (mdf['n_heads'] == 1)
+          & (mdf['n_tasks'] == 1)
           ]
 
 mdf = mdf.replace({
