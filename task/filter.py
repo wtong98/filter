@@ -97,7 +97,7 @@ def pred_kalman(xs, task, return_mat=False):
         ba = A @ bp
         Sa = A @ Sp @ A.T + S_u
 
-        true_mse = C @ Sa @ C.T + S_w
+        true_mse = np.trace(C @ Sa @ C.T + S_w) / task.n_dims
         all_true_mse.append(true_mse)
 
         obs = C @ ba

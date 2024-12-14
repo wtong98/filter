@@ -86,7 +86,7 @@ for task in test_tasks:
 eval_cases(all_cases, eval_task=test_tasks)
 
 for case in all_cases:
-    case.info['params'] = case.state.params
+    # case.info['params'] = case.state.params
     case.state = None
     case.hist = None
 

@@ -33,7 +33,9 @@ def extract_plot_vals(row):
     task = row['test_task']
     task.n_tasks = 1
     xs = next(task)
-    kalman_preds = pred_kalman(xs, task)
+    kalman_preds, kalman_true_mse = pred_kalman(xs, task)
+
+    kalman_true_mse = kalman_true_mse[:-1]
 
     xs = xs[:,1:]
     kalman_preds = kalman_preds[:,:-1]
@@ -51,12 +53,13 @@ def extract_plot_vals(row):
         row['info']['naive_mse'],
         row['info']['zero_mse'],
         kalman_mse,
+        kalman_true_mse,
         np.arange(time_len)
-    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'noise', 'length', 'max_sval', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time'])
+    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'noise', 'length', 'max_sval', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
 
 plot_df = df.apply(extract_plot_vals, axis=1) \
             .reset_index(drop=True) \
-            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'time']) \
+            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time']) \
             .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'noise', 'length', 'max_sval', 'time'], var_name='mse_type', value_name='mse')
 plot_df['mse'] = plot_df['mse'].astype(float)
 
@@ -90,22 +93,37 @@ mdf = mdf[(mdf['mse_type'] != 'naive_mse')
 mdf = mdf.replace({
     'pred_mse': 'Transformer',
     'zero_mse': 'Zero Predictor',
-    'kalman_mse': 'Kalman'
+    'kalman_mse': 'Kalman (actual)',
+    'kalman_true_mse': 'Kalman (theory)'
 })
 # <codecell>
-g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', hue_order=['Transformer', 'Kalman', 'Zero Predictor'], palette=['C0', 'C1', 'C8'], marker='o', markersize=3, alpha=0.7)
+g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', 
+                 hue_order=['Transformer', 'Kalman (actual)', 'Zero Predictor'], 
+                 palette=['C0', 'C1', 'C8'], 
+                 marker='o', markersize=5, alpha=0.7)
 g.set_yscale('log')
 g.set_xlabel('Time')
 g.set_ylabel('MSE')
 
 g.axvline(x=14, linestyle='dashed', color='gray')
 
+adf = mdf[mdf['mse_type'] == 'Kalman (theory)']
+sns.lineplot(adf, x='time', y='mse', linewidth=1, ax=g, color='red', ci=None, alpha=0.7)
+
+handles, labels = g.get_legend_handles_labels()
+handles.insert(2, g.get_children()[10])
+labels.insert(2, 'Kalman (theory)')
+
+plt.text(11.8, 9e-3, 'train/test split', rotation=90, va='center', color='gray', fontsize=10)
+
+plt.legend(handles, labels)
+
 g.legend_.set_title(None)
 
-g.figure.set_size_inches(4.5, 3)
+g.figure.set_size_inches(5.5, 3.5)
 g.figure.tight_layout()
 
-sns.move_legend(g, "upper left", bbox_to_anchor=(0.3, 1.1))
+sns.move_legend(g, "upper left", bbox_to_anchor=(0.45, 1.1))
 
 plt.savefig('fig/transformer_vs_kalman_sample.png')
 
@@ -236,7 +254,7 @@ pred = pred[:,:-1]
 train_task.n_tasks = 1
 # xs_k = next(train_task)
 xs_k = xs
-pred_k = pred_kalman(xs_k, train_task)
+pred_k, _ = pred_kalman(xs_k, train_task)
 xs_k = xs_k[:,1:]
 pred_k = pred_k[:,:-1]
 
@@ -313,6 +331,10 @@ idx = 0
 
 dists = []
 
+big_d = (xs.shape[1] - 1) * xs.shape[2]
+big_mats_acc = np.zeros((big_d, big_d))
+all_ms = []
+
 for idx in tqdm(range(xs.shape[0])):
     x = xs[idx][:-1]
     A = att[idx]
@@ -326,12 +348,19 @@ for idx in tqdm(range(xs.shape[0])):
         big_mat.append(row)
 
     big_mat = np.block(big_mat)
+    big_mats_acc += big_mat
 
     x = x.reshape(-1, 1)
     x_pred = big_mat @ x
     x_pred = x_pred.reshape(A.shape[0], -1)
 
     k_preds, kalman_mat = pred_kalman(xs, train_task, return_mat=True)
+
+    big_mat_vals = big_mat[~np.isclose(kalman_mat, 0)]
+    kal_mat_vals = kalman_mat[~np.isclose(kalman_mat, 0)]
+
+    m = np.linalg.lstsq(big_mat_vals[:,None], kal_mat_vals)[0]
+    all_ms.append(m)
 
     # k_preds = k_preds[idx]
 
@@ -344,20 +373,26 @@ for idx in tqdm(range(xs.shape[0])):
     dists.append(np.mean((big_mat - kalman_mat)**2))
 
 # <codecell>
-plt.hist(dists, bins=50)
-plt.xlabel('Entry-wise MSE')
-plt.ylabel('Count')
+big_mat_mean = big_mats_acc / xs.shape[0]
 
-plt.tight_layout()
-
-# <codecell>
-big_mat_vals = big_mat[~np.isclose(kalman_mat, 0)]
+big_mat_vals = big_mat_mean[~np.isclose(kalman_mat, 0)]
 kal_mat_vals = kalman_mat[~np.isclose(kalman_mat, 0)]
 
-m = np.linalg.lstsq(big_mat_vals[:,None], kal_mat_vals)[0]
+# m = np.linalg.lstsq(big_mat_vals[:,None], kal_mat_vals)[0]
 r2 = np.corrcoef(big_mat_vals, kal_mat_vals)[0,1]**2
 
 vals = np.linspace(-0.2, 0.2, 500)
+
+all_ms = np.sort(all_ms)
+low_idx = int(0.025 * len(all_ms))
+hi_idx = int(0.975 * len(all_ms))
+all_ms = all_ms[low_idx:hi_idx]
+
+for m_sel in all_ms:
+    plt.plot(vals, m_sel * vals, color='thistle', alpha=0.1)
+
+m = np.mean(all_ms)
+
 plt.plot(vals, m * vals, color='red', alpha=0.5)
 plt.scatter(big_mat_vals, kal_mat_vals, alpha=0.03, s=1)
 
@@ -369,7 +404,14 @@ plt.ylabel('Kalman coefficients')
 plt.tight_layout()
 plt.savefig('fig/transformer_vs_kalman_reg_coeff.png')
 
-# plt.savefig('fig/att_vs_kalman_coeff.png', bbox_inches='tight')
+
+# <codecell>
+plt.hist(dists, bins=50)
+plt.xlabel('Entry-wise MSE')
+plt.ylabel('Count')
+
+plt.tight_layout()
+
 
 # <codecell>
 big_mat_svals = np.linalg.svdvals(big_mat)
