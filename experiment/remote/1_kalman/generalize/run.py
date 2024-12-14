@@ -18,22 +18,22 @@ from task.filter import KalmanFilterTask
 run_id = new_seed()
 print('RUN ID', run_id)
 
-run_split = 12
+run_split = 9
 
 train_iters = 5_000
 # n_layers = [1, 2, 4]
-n_layers = [1]
+n_layers = [1, 2, 4]
 n_widths = [2048]
 # n_heads = [1, 2]
-n_heads = [1]
+n_heads = [1, 2, 4]
 
-noises = [0.1, 0.25, 0.5, 1]
+noises = [0.1]
 lengths = [16]
 max_svals = [1]
 
-pos_emb = [True, False]
-n_tasks = [1, None]
-max_svals = [1, 1.5, 2]
+pos_emb = [False]
+n_tasks = [1]
+max_svals = [1]
 
 n_dims = 32
 

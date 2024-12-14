@@ -156,7 +156,7 @@ def extract_plot_vals(row):
         row['train_task'].t_noise,
         row['train_task'].length,
         row['train_task'].max_sval,
-        row['train_task'].n_tasks,
+        row['train_task'].n_tasks if row['train_task'].n_tasks is not None else 0,
         row['info']['pred_mse'],
         row['info']['naive_mse'],
         row['info']['zero_mse'],
@@ -173,6 +173,16 @@ plot_df['mse'] = plot_df['mse'].astype(float)
 
 plot_df
 
+# <codecell>
+mdf = plot_df[plot_df['mse_type'] == 'kalman_true_mse']
+gdf = mdf.groupby(['name', 'n_layers', 'n_hidden', 'n_heads', 'pos_emb', 'noise', 'length', 'max_sval', 'n_tasks', 'time', 'mse_type']).mean()
+gdf = gdf.reset_index()
+
+adf = plot_df[plot_df['mse_type'] != 'kalman_true_mse']
+adf = pd.concat((adf, gdf))
+adf
+
+plot_df = adf
 
 # <codecell>
 # n_head / n_depth sweep
@@ -234,23 +244,70 @@ mdf = mdf.replace({
     'kalman_true_mse': 'Kalman (theory)'
 })
 
+
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
             col='noise',
             kind='line', 
             marker='o', alpha=0.7, markersize=5,
             hue_order=['Transformer', 'Kalman (actual)', 'Kalman (theory)', 'Zero Predictor'],
             palette=['C0', 'C1', 'C3', 'C8'], 
-            height=3, aspect=1.2, facet_kws={'sharey': False})
+            height=3, aspect=1.25, 
+            facet_kws={'sharey': False}
+)
 
 gs.set(yscale='log')
 gs.set_xlabels('Time')
 gs.set_ylabels('MSE')
-# gs.set_titles("{row_name} Layers, {col_name} Heads")
+gs.set_titles(r"$\sigma^2 = {col_name}$")
 
 gs.legend.set_title(None)
 
+gs.tight_layout()
+plt.savefig('fig/noise_sweep.png', bbox_inches='tight')
+
 # <codecell>
 # Fixed vs. varying AC and max SV
+mdf = plot_df.copy()
+
+mdf = mdf[(mdf['mse_type'] != 'naive_mse')
+          & (mdf['pos_emb'] == False)
+          & (mdf['max_sval'] != 1.5)
+          & (mdf['time'] > 0)
+          & (mdf['n_layers'] == 1)
+          & (mdf['n_heads'] == 1)
+          & (mdf['noise'] == 0.1)
+          ]
+
+mdf = mdf.replace({
+    'pred_mse': 'Transformer',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman (actual)',
+    'kalman_true_mse': 'Kalman (theory)'
+})
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
+            col='max_sval',
+            row='n_tasks',
+            kind='line', 
+            marker='o', alpha=0.5, markersize=5,
+            hue_order=['Transformer', 'Kalman (actual)', 'Kalman (theory)', 'Zero Predictor'],
+            palette=['C0', 'C1', 'C3', 'C8'], 
+            height=3, aspect=1.25, 
+            facet_kws={'sharey': False}
+)
+
+gs.set(yscale='log')
+gs.set_xlabels('Time')
+gs.set_ylabels('MSE')
+gs.set_titles(r"$s \leq {col_name}$")
+
+gs.axes[0,0].set_ylabel('MSE (varying AC)')
+gs.axes[1,0].set_ylabel('MSE (fixed AC)')
+
+gs.legend.set_title(None)
+
+gs.tight_layout()
+plt.savefig('fig/varying_ac_compare.png', bbox_inches='tight')
 
 # <codecell>
 # impact of positional embeddings
@@ -290,7 +347,7 @@ handles, labels = g.get_legend_handles_labels()
 handles.insert(2, g.get_children()[10])
 labels.insert(2, 'Kalman (theory)')
 
-plt.text(11.8, 9e-3, 'train/test split', rotation=90, va='center', color='gray', fontsize=10)
+plt.text(11.8, 2e-2, 'train/test split', rotation=90, va='center', color='gray', fontsize=10)
 
 plt.legend(handles, labels)
 
@@ -299,10 +356,8 @@ g.legend_.set_title(None)
 g.figure.set_size_inches(5.5, 3.5)
 g.figure.tight_layout()
 
-sns.move_legend(g, "upper left", bbox_to_anchor=(0.45, 1.1))
-
-
-
+sns.move_legend(g, "lower left", bbox_to_anchor=(1, 0))
+plt.savefig('fig/sinus_pos_enc.png', bbox_inches='tight')
 
 # <codecell>
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
