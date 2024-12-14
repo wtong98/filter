@@ -18,16 +18,20 @@ from task.filter import KalmanFilterTask
 run_id = new_seed()
 print('RUN ID', run_id)
 
-run_split = 4
+run_split = 12
 
 train_iters = 25_000
-n_layers = [1]
+n_layers = [1, 2, 4]
 n_widths = [2048]
-n_heads = [1]
+n_heads = [1, 2, 4]
 
-noises = [0.001, 0.01, 0.1, 1]
+noises = [0.001, 0.01, 0.1]
 lengths = [16]
 max_svals = [1]
+
+pos_emb = [True, False]
+n_tasks = [1, None]
+max_svals = [1, 1.5, 2]
 
 n_dims = 32
 
@@ -49,13 +53,13 @@ n_dims = 32
 
 all_cases = []
 
-for max_sval, noise, n_head, n_width, n_layer, length in itertools.product(max_svals, noises, n_heads, n_widths, n_layers, lengths):
+for p_emb, n_task, max_sval, noise, n_head, n_width, n_layer, length in itertools.product(pos_emb, n_tasks, max_svals, noises, n_heads, n_widths, n_layers, lengths):
     seed = new_seed()
     all_cases.extend([
         Case('Transformer',
             TransformerConfig(n_layers=n_layer,
                             n_hidden=n_width,
-                            pos_emb=False,
+                            pos_emb=p_emb,
                             n_mlp_layers=0,
                             n_heads=n_head,
                             layer_norm=False,
@@ -64,8 +68,8 @@ for max_sval, noise, n_head, n_width, n_layer, length in itertools.product(max_s
                             return_final_logits_only=False,
                             n_out=n_dims),
             train_args={'train_iters': train_iters, 'test_iters': 1, 'test_every': 1000},
-            train_task=KalmanFilterTask(length=length, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, seed=seed),
-            test_task=KalmanFilterTask(length=length, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, batch_size=1024, seed=seed),
+            train_task=KalmanFilterTask(length=length, n_tasks=n_tasks, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, seed=seed),
+            test_task=KalmanFilterTask(length=length, n_tasks=n_tasks, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, batch_size=1024, seed=seed),
         )
     ])
 

@@ -79,7 +79,6 @@ def pred_kalman(xs, task, return_mat=False):
     S_w = Io * task.o_noise / task.n_obs_dims
 
     ba = np.zeros((task.n_dims, task.batch_size))
-    # ba = np.random.randn(task.n_dims, task.batch_size) / np.sqrt(task.n_dims)
     Sa = S_u.copy()
 
     preds = []
@@ -135,22 +134,22 @@ def pred_kalman(xs, task, return_mat=False):
         return preds, all_true_mse
 
 # <codecell>
-noise = 0.1
-task = KalmanFilterTask(batch_size=1024, length=60, t_noise=noise, o_noise=noise, n_dims=40, n_tasks=1)
-xs = next(task)
-preds, all_true_mse = pred_kalman(xs, task)
+# noise = 0.1
+# task = KalmanFilterTask(batch_size=1024, length=60, t_noise=noise, o_noise=noise, n_dims=40, n_tasks=1)
+# xs = next(task)
+# preds, all_true_mse = pred_kalman(xs, task)
 
-preds = preds[:,:-1]
-xs = xs[:,1:]
+# preds = preds[:,:-1]
+# xs = xs[:,1:]
 
-k_mse = ((preds - xs)**2).mean(axis=(0, -1))
-z_mse = (xs**2).mean(axis=(0, -1))
+# k_mse = ((preds - xs)**2).mean(axis=(0, -1))
+# z_mse = (xs**2).mean(axis=(0, -1))
 
-mse = [np.trace(m) / task.n_dims for m in all_true_mse]
+# mse = [np.trace(m) / task.n_dims for m in all_true_mse]
 
-plt.plot(k_mse, 'o--', label='empirical')
-plt.plot(mse[1:], '--', label='true')
-plt.legend()
+# plt.plot(k_mse, 'o--', label='empirical')
+# plt.plot(mse[1:], '--', label='true')
+# plt.legend()
 
 # <codecell>
 
