@@ -26,7 +26,7 @@ class KalmanFilterTask:
         self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
         self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
         self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims)
-        # self.o_mat = np.eye(self.n_obs_dims)[None]
+        # self.o_mat = self.o_mat / np.linalg.norm(self.o_mat, ord=2) * self.max_sval
 
         self.rng = np.random.default_rng(None)
     
@@ -54,14 +54,14 @@ class KalmanFilterTask:
             zs = t_mat @ zs + np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.t_noise / self.n_dims)
             xs_all.append(xs)
         
-        xs_all = np.stack(xs_all, axis=1).squeeze()
+        xs_all = np.stack(xs_all, axis=1)[...,0]
         return xs_all
 
     def __iter__(self):
         return self
 
 
-# task = KalmanFilterTask(max_sval=1.5, length=16, batch_size=32, n_tasks=None, n_obs_dims=None, o_noise=0.001, t_noise=0.001)
+# task = KalmanFilterTask(max_sval=1.5, length=16, batch_size=32, n_tasks=None, n_obs_dims=1, o_noise=0.001, t_noise=0.001)
 # xs = next(task)
 
 # plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
@@ -69,7 +69,7 @@ class KalmanFilterTask:
 # xs.shape
 
 # <codecell>
-def pred_kalman(xs, task):
+def pred_kalman(xs, task, return_mat=False):
     I = np.eye(task.n_dims)
     Io = np.eye(task.n_obs_dims)
 
@@ -79,30 +79,113 @@ def pred_kalman(xs, task):
     S_w = Io * task.o_noise / task.n_obs_dims
 
     ba = np.zeros((task.n_dims, task.batch_size))
+    # ba = np.random.randn(task.n_dims, task.batch_size) / np.sqrt(task.n_dims)
     Sa = S_u.copy()
 
     preds = []
+    Ms = []
+    Ns = []
+    all_true_mse = []
 
-    # begin loop
     for i in range(xs.shape[1]):
         y = xs[:,i].T
 
         L = Sa @ C.T @ np.linalg.pinv(C @ Sa @ C.T + S_w)
+
         bp = (I - L @ C) @ ba + L @ y
         Sp = (I - L @ C) @ Sa
 
         ba = A @ bp
         Sa = A @ Sp @ A.T + S_u
 
+        true_mse = C @ Sa @ C.T + S_w
+        all_true_mse.append(true_mse)
+
         obs = C @ ba
         preds.append(obs.T)
 
-    preds = np.stack(preds, axis=1)
-    return preds
+        M = A @ (I - L @ C)
+        N = A @ L
 
-# task = KalmanFilterTask(t_noise=0.25, o_noise=0.25, n_obs_dims=2, n_tasks=1)
-# xs = next(task)
-# preds = pred_kalman(xs, task)
+        Ms.append(M)
+        Ns.append(N)
+
+    preds = np.stack(preds, axis=1)
+    Ms = np.stack(Ms, axis=0)
+    Ns = np.stack(Ns, axis=0)
+
+    if return_mat:
+        kalman_mat = []
+        for i in range(xs.shape[1]):
+            row = []
+            for t in range(i):
+                cum_mat = Ns[t]
+                for j in range(t+1, i):
+                    cum_mat = Ms[j] @ cum_mat
+                row.append(C @ cum_mat)
+            kalman_mat.append(row)
+
+            while len(row) < xs.shape[1] - 1:
+                row.append(np.zeros((C.shape[0], C.shape[0])))
+            
+        kalman_mat = kalman_mat[1:]
+        kalman_mat = np.block(kalman_mat)
+        return preds, kalman_mat
+    else:
+        return preds, all_true_mse
+
+# <codecell>
+noise = 0.1
+task = KalmanFilterTask(batch_size=1024, length=60, t_noise=noise, o_noise=noise, n_dims=40, n_tasks=1)
+xs = next(task)
+preds, all_true_mse = pred_kalman(xs, task)
+
+preds = preds[:,:-1]
+xs = xs[:,1:]
+
+k_mse = ((preds - xs)**2).mean(axis=(0, -1))
+z_mse = (xs**2).mean(axis=(0, -1))
+
+mse = [np.trace(m) / task.n_dims for m in all_true_mse]
+
+plt.plot(k_mse, 'o--', label='empirical')
+plt.plot(mse[1:], '--', label='true')
+plt.legend()
+
+# <codecell>
+
+
+# preds, Ms, Ns, C = pred_kalman(xs, task, return_mat=True)
+# preds, kalman_mat = pred_kalman(xs, task, return_mat=True)
+
+# kalman_mat = []
+# for i in range(xs.shape[1]):
+#     row = []
+#     for t in range(i):
+#         cum_mat = Ns[t]
+#         for j in range(t+1, i):
+#             cum_mat = Ms[j] @ cum_mat
+#         row.append(C @ cum_mat)
+#     kalman_mat.append(row)
+
+#     while len(row) < xs.shape[1] - 1:
+#         row.append(np.zeros((C.shape[0], C.shape[0])))
+    
+# kalman_mat = kalman_mat[1:]
+# kalman_mat = np.block(kalman_mat)
+# kalman_mat.shape
+
+# xs_start = xs[:,:-1]
+# xs_start = xs_start.reshape((xs.shape[0], -1))
+# xs_pred = kalman_mat @ xs_start.T
+
+# xs_pred = xs_pred.T.reshape(xs.shape[0], -1, 1)
+# xs_pred.shape
+
+# preds = preds[:,:-1]
+
+# np.mean((preds - xs_pred)**2)
+
 
 # xs = xs[:,1:]
 # preds = preds[:,:-1]

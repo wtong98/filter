@@ -20,6 +20,8 @@ from train import *
 from model.transformer import TransformerConfig 
 from task.filter import KalmanFilterTask, pred_kalman
 
+set_theme()
+
 # <codecell>
 df = collate_dfs('remote/1_kalman/generalize')
 df
@@ -68,15 +70,44 @@ mdf = plot_df[plot_df['n_hidden'] == 2048]
 #           & (mdf['max_sval'] == 2)]
 
 mdf = mdf[(mdf['mse_type'] != 'naive_mse')
-          & (mdf['n_layers'] == 2)
-          & (mdf['n_heads'] == 2)
-          & (mdf['length'] == 16)]
+        #   & (mdf['n_layers'] == 2)
+        #   & (mdf['n_heads'] == 2)
+        #   & (mdf['length'] == 16)
+          ]
 
-gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', row='noise', col='max_sval', kind='line', marker='o', alpha=0.5, height=3, facet_kws={'sharey': False})
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='noise', kind='line', marker='o', alpha=0.5, height=3, facet_kws={'sharey': False})
 gs.set(yscale='log')
 
 # plt.savefig('fig/filter_noise_var_mat_nhead2_nlayer2.png')
 
+# <codecell>
+mdf = plot_df.copy()
+mdf = mdf[(mdf['mse_type'] != 'naive_mse')
+          & (mdf['noise'] == 0.1)
+          & (mdf['time'] > 0)
+          ]
+
+mdf = mdf.replace({
+    'pred_mse': 'Transformer',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman'
+})
+# <codecell>
+g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', hue_order=['Transformer', 'Kalman', 'Zero Predictor'], palette=['C0', 'C1', 'C8'], marker='o', markersize=3, alpha=0.7)
+g.set_yscale('log')
+g.set_xlabel('Time')
+g.set_ylabel('MSE')
+
+g.axvline(x=14, linestyle='dashed', color='gray')
+
+g.legend_.set_title(None)
+
+g.figure.set_size_inches(4.5, 3)
+g.figure.tight_layout()
+
+sns.move_legend(g, "upper left", bbox_to_anchor=(0.3, 1.1))
+
+plt.savefig('fig/transformer_vs_kalman_sample.png')
 
 # <codecell>
 df = collate_dfs('remote/1_kalman/sweep_lo_dim')
@@ -121,10 +152,16 @@ mdf = plot_df.copy()
 mdf = mdf[(mdf['n_tasks'] == 1) & (mdf['mse_type'] != 'naive_mse')] 
 
 
-gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_obs_dims', kind='line', marker='o', alpha=0.5, height=3, facet_kws={'sharey': False})
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
+                 col='n_obs_dims', 
+                 kind='line', 
+                 marker='o', 
+                 alpha=0.5, 
+                 height=3, 
+                 facet_kws={'sharey': True})
 gs.set(yscale='log')
 
-plt.savefig('fig/low_obs_dim_diff_y.png')
+# plt.savefig('fig/low_obs_dim_diff_y.png')
 
 # <codecell>
 task = KalmanFilterTask(length=16, n_dims=32, t_noise=0.25, o_noise=0.25)
@@ -144,13 +181,14 @@ print(z_mse)
 
 # <codecell>
 length = 16
-n_dims = 4
+n_dims = 32
+n_obs_dims = 32
 
-noise = 0.25
+noise = 0.1
 
 seed = new_seed()
-train_task = KalmanFilterTask(length=length, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed)
-test_task = KalmanFilterTask(length=length, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed)
+train_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=1)
+test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=1)
 
 
 config = TransformerConfig(n_layers=1,
@@ -163,7 +201,7 @@ config = TransformerConfig(n_layers=1,
                            freeze_emb=False,
                            return_final_logits_only=False,
                         #    use_simple_att=True,
-                           n_out=n_dims)
+                           n_out=n_obs_dims)
 
 
 # xs = next(train_task)
@@ -177,13 +215,13 @@ state, hist = train(config,
                     data_iter=iter(train_task), 
                     test_iter=iter(test_task), 
                     test_every=500,
-                    train_iters=10_000, 
+                    train_iters=5_000, 
                     seed=None)
 
 # <codecell>
 train_task.n_tasks = 1
 train_task.batch_size = 1024
-train_task.length = 64
+train_task.length = 16
 
 xs = next(train_task)
 pred = state.apply_fn({'params': state.params}, xs)
@@ -210,9 +248,9 @@ zero_mse = (xs**2).mean(axis=(0, -1))
 kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
 
 # normalize by magnitude
-pred_mse /= zero_mse
-kalman_mse /= zero_mse
-zero_mse /= zero_mse
+# pred_mse /= zero_mse
+# kalman_mse /= zero_mse
+# zero_mse /= zero_mse
 
 plt.plot(pred_mse, '--o', label='pred', alpha=0.7)
 # plt.plot(naive_mse, '--o', label='naive', alpha=0.7)
@@ -227,7 +265,7 @@ plt.xlabel('time')
 plt.ylabel('mse')
 plt.tight_layout()
 
-plt.savefig('fig/extrapolation_nope_no_mlp_softmax_att_dim4.png')
+# plt.savefig('fig/extrapolation_nope_no_mlp_softmax_att_dim4.png')
 
 # <codecell>
 train_task.n_tasks = 1
@@ -246,7 +284,112 @@ for ax, a in zip(axs.ravel(), att):
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
 plt.tight_layout()
-plt.savefig('fig/attention.png')
+# plt.savefig('fig/attention.png')
+
 # <codecell>
-plt.plot(xs[0].mean(axis=-1), '--o')
-plt.plot(pred[0].mean(axis=-1), '--o')
+jax.tree.map(lambda x: x.shape, state.params)
+
+E = state.params['Dense_0']['kernel']
+D = state.params['Dense_1']['kernel']
+V = state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['value']['kernel'].squeeze()
+O = state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['out']['kernel'].squeeze()
+
+M = (E @ V @ O @ D)
+
+ps = xs @ M
+ps.shape
+
+att.shape
+
+ps = jnp.einsum('bqk,bkd->...bqd', att, ps)
+
+print(pred[0,0])
+print(ps[0,0])
+
+np.mean((pred - ps)**2)
+
+# <codecell>
+idx = 0
+
+dists = []
+
+for idx in tqdm(range(xs.shape[0])):
+    x = xs[idx][:-1]
+    A = att[idx]
+
+    big_mat = []
+    for i in range(A.shape[0] - 1):
+        row = []
+        for j in range(A.shape[1] - 1):
+            row.append(A[i,j] * M.T)
+        
+        big_mat.append(row)
+
+    big_mat = np.block(big_mat)
+
+    x = x.reshape(-1, 1)
+    x_pred = big_mat @ x
+    x_pred = x_pred.reshape(A.shape[0], -1)
+
+    k_preds, kalman_mat = pred_kalman(xs, train_task, return_mat=True)
+
+    # k_preds = k_preds[idx]
+
+    # x = x.reshape(-1, 1)
+    # x_pred = kalman_mat @ x[:480]
+    # x_pred = x_pred.reshape(A.shape[0], -1)
+
+    # kalman_mag = np.mean(kalman_mat**2) * 2
+    # dists.append(2 * np.mean(np.sqrt((big_mat - kalman_mat)**2 / kalman_mag)))
+    dists.append(np.mean((big_mat - kalman_mat)**2))
+
+# <codecell>
+plt.hist(dists, bins=50)
+plt.xlabel('Entry-wise MSE')
+plt.ylabel('Count')
+
+plt.tight_layout()
+
+# <codecell>
+big_mat_vals = big_mat[~np.isclose(kalman_mat, 0)]
+kal_mat_vals = kalman_mat[~np.isclose(kalman_mat, 0)]
+
+m = np.linalg.lstsq(big_mat_vals[:,None], kal_mat_vals)[0]
+r2 = np.corrcoef(big_mat_vals, kal_mat_vals)[0,1]**2
+
+vals = np.linspace(-0.2, 0.2, 500)
+plt.plot(vals, m * vals, color='red', alpha=0.5)
+plt.scatter(big_mat_vals, kal_mat_vals, alpha=0.03, s=1)
+
+plt.text(-0.17, 0.1, f'$r^2 = {r2:.2f}$', color='red', fontsize=10)
+
+plt.xlabel('Transformer coefficients')
+plt.ylabel('Kalman coefficients')
+
+plt.tight_layout()
+plt.savefig('fig/transformer_vs_kalman_reg_coeff.png')
+
+# plt.savefig('fig/att_vs_kalman_coeff.png', bbox_inches='tight')
+
+# <codecell>
+big_mat_svals = np.linalg.svdvals(big_mat)
+kal_mat_svals = np.linalg.svdvals(kalman_mat)
+
+cutoff = 1e-3
+n_cutoff = np.sum(kal_mat_svals < cutoff)
+
+ranks = np.arange(len(kal_mat_svals))[:-n_cutoff]
+ratios = (big_mat_svals / kal_mat_svals)[:-n_cutoff]
+
+# <codecell>
+vals = np.linspace(0, 480, 500)
+plt.plot(vals, 0 * vals + 1, '--', color='gray')
+plt.scatter(ranks, ratios, s=5, alpha=0.9)
+
+plt.xlabel('SV rank')
+plt.ylabel('Tf SV / Km SV')
+
+plt.tight_layout()
+plt.savefig('fig/transformer_vs_kalman_sv.png', bbox_inches='tight')
+
+
