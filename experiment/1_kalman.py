@@ -23,7 +23,7 @@ from task.filter import KalmanFilterTask, pred_kalman
 set_theme()
 
 # <codecell>
-df = collate_dfs('remote/1_kalman/generalize')
+df = collate_dfs('remote/1_kalman/generalize/set4_good_sample')
 df
 
 # <codecell>
@@ -128,6 +128,201 @@ sns.move_legend(g, "upper left", bbox_to_anchor=(0.45, 1.1))
 plt.savefig('fig/transformer_vs_kalman_sample.png')
 
 # <codecell>
+### LARGE SWEEP
+df = collate_dfs('remote/1_kalman/generalize')
+df
+
+# <codecell>
+def extract_plot_vals(row):
+    time_len = len(row['info']['pred_mse'])
+
+    task = row['test_task']
+    task.n_tasks = 1
+    xs = next(task)
+    kalman_preds, kalman_true_mse = pred_kalman(xs, task)
+
+    kalman_true_mse = kalman_true_mse[:-1]
+
+    xs = xs[:,1:]
+    kalman_preds = kalman_preds[:,:-1]
+    kalman_mse = ((xs - kalman_preds)**2).mean(axis=(0, -1))
+
+    return pd.Series([
+        row['name'],
+        row['config']['n_layers'],
+        row['config']['n_hidden'],
+        row['config']['n_heads'],
+        row['config']['pos_emb'],
+        row['train_task'].t_noise,
+        row['train_task'].length,
+        row['train_task'].max_sval,
+        row['train_task'].n_tasks,
+        row['info']['pred_mse'],
+        row['info']['naive_mse'],
+        row['info']['zero_mse'],
+        kalman_mse,
+        kalman_true_mse,
+        np.arange(time_len)
+    ], index=['name', 'n_layers', 'n_hidden', 'n_heads', 'pos_emb', 'noise', 'length', 'max_sval', 'n_tasks', 'pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
+
+plot_df = df.apply(extract_plot_vals, axis=1) \
+            .reset_index(drop=True) \
+            .explode(['pred_mse', 'naive_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time']) \
+            .melt(id_vars=['name', 'n_layers', 'n_hidden', 'n_heads', 'pos_emb', 'noise', 'length', 'max_sval', 'n_tasks', 'time'], var_name='mse_type', value_name='mse')
+plot_df['mse'] = plot_df['mse'].astype(float)
+
+plot_df
+
+
+# <codecell>
+# n_head / n_depth sweep
+mdf = plot_df.copy()
+
+mdf = mdf[(mdf['mse_type'] != 'naive_mse')
+          & (mdf['noise'] == 0.1)
+          & (mdf['max_sval'] == 1)
+          & (mdf['pos_emb'] == False)
+          & (mdf['time'] > 0)
+          & (mdf['n_layers'] != 4)
+          ]
+
+mdf = mdf.replace({
+    'pred_mse': 'Transformer',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman (actual)',
+    'kalman_true_mse': 'Kalman (theory)'
+})
+
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
+            row='n_layers',
+            col='n_heads',
+            kind='line', 
+            marker='o', alpha=0.7, markersize=5,
+            hue_order=['Transformer', 'Kalman (actual)', 'Kalman (theory)', 'Zero Predictor'],
+            palette=['C0', 'C1', 'C3', 'C8'], 
+            height=3, aspect=1.2)
+
+gs.set(yscale='log')
+gs.set_xlabels('Time')
+gs.set_ylabels('MSE')
+gs.set_titles("{row_name} Layers, {col_name} Heads")
+
+gs.legend.set_title(None)
+plt.savefig('fig/head_layer_sweep.png')
+
+
+# <codecell>
+# impact of noise
+
+# NOTE: noise should be over higher values
+mdf = plot_df.copy()
+
+mdf = mdf[(mdf['mse_type'] != 'naive_mse')
+          & (mdf['max_sval'] == 1)
+          & (mdf['pos_emb'] == False)
+          & (mdf['time'] > 0)
+          & (mdf['n_layers'] == 1)
+          & (mdf['n_heads'] == 1)
+          ]
+
+mdf = mdf.replace({
+    'pred_mse': 'Transformer',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman (actual)',
+    'kalman_true_mse': 'Kalman (theory)'
+})
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
+            col='noise',
+            kind='line', 
+            marker='o', alpha=0.7, markersize=5,
+            hue_order=['Transformer', 'Kalman (actual)', 'Kalman (theory)', 'Zero Predictor'],
+            palette=['C0', 'C1', 'C3', 'C8'], 
+            height=3, aspect=1.2, facet_kws={'sharey': False})
+
+gs.set(yscale='log')
+gs.set_xlabels('Time')
+gs.set_ylabels('MSE')
+# gs.set_titles("{row_name} Layers, {col_name} Heads")
+
+gs.legend.set_title(None)
+
+# <codecell>
+# Fixed vs. varying AC and max SV
+
+# <codecell>
+# impact of positional embeddings
+mdf = plot_df.copy()
+
+mdf = mdf[(mdf['mse_type'] != 'naive_mse')
+          & (mdf['max_sval'] == 1)
+          & (mdf['noise'] == 0.1)
+          & (mdf['pos_emb'] == True)
+          & (mdf['time'] > 0)
+          & (mdf['n_layers'] == 1)
+          & (mdf['n_heads'] == 1)
+          ]
+
+mdf = mdf.replace({
+    'pred_mse': 'Transformer',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman (actual)',
+    'kalman_true_mse': 'Kalman (theory)'
+})
+
+g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', 
+                 hue_order=['Transformer', 'Kalman (actual)', 'Zero Predictor'], 
+                 palette=['C0', 'C1', 'C8'], 
+                 marker='o', markersize=5, alpha=0.7)
+g.set_yscale('log')
+g.set_xlabel('Time')
+g.set_ylabel('MSE')
+
+g.axvline(x=14, linestyle='dashed', color='gray')
+
+adf = mdf[mdf['mse_type'] == 'Kalman (theory)']
+sns.lineplot(adf, x='time', y='mse', linewidth=1, ax=g, color='red', ci=None, alpha=0.7)
+
+handles, labels = g.get_legend_handles_labels()
+handles.insert(2, g.get_children()[10])
+labels.insert(2, 'Kalman (theory)')
+
+plt.text(11.8, 9e-3, 'train/test split', rotation=90, va='center', color='gray', fontsize=10)
+
+plt.legend(handles, labels)
+
+g.legend_.set_title(None)
+
+g.figure.set_size_inches(5.5, 3.5)
+g.figure.tight_layout()
+
+sns.move_legend(g, "upper left", bbox_to_anchor=(0.45, 1.1))
+
+
+
+
+# <codecell>
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
+            col='noise',
+            kind='line', 
+            marker='o', alpha=0.7, markersize=5,
+            hue_order=['Transformer', 'Kalman (actual)', 'Kalman (theory)', 'Zero Predictor'],
+            palette=['C0', 'C1', 'C3', 'C8'], 
+            height=3, aspect=1.2, facet_kws={'sharey': False})
+
+gs.set(yscale='log')
+gs.set_xlabels('Time')
+gs.set_ylabels('MSE')
+# gs.set_titles("{row_name} Layers, {col_name} Heads")
+
+gs.legend.set_title(None)
+
+
+
+
+
+# <codecell>
 df = collate_dfs('remote/1_kalman/sweep_lo_dim')
 df
 
@@ -210,8 +405,8 @@ test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_
 
 
 config = TransformerConfig(n_layers=1,
-                           n_hidden=512,
-                           pos_emb=False,
+                           n_hidden=2048,
+                           pos_emb=True,
                            n_mlp_layers=0,
                            n_heads=1,
                            layer_norm=False,
@@ -238,8 +433,8 @@ state, hist = train(config,
 
 # <codecell>
 train_task.n_tasks = 1
-train_task.batch_size = 1024
-train_task.length = 16
+train_task.batch_size = 128
+train_task.length = 64
 
 xs = next(train_task)
 pred = state.apply_fn({'params': state.params}, xs)

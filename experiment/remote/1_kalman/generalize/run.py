@@ -20,12 +20,14 @@ print('RUN ID', run_id)
 
 run_split = 12
 
-train_iters = 25_000
-n_layers = [1, 2, 4]
+train_iters = 10_000
+# n_layers = [1, 2, 4]
+n_layers = [1]
 n_widths = [2048]
-n_heads = [1, 2, 4]
+# n_heads = [1, 2, 4]
+n_heads = [1]
 
-noises = [0.001, 0.01, 0.1]
+noises = [0.1, 0.25, 0.5, 1]
 lengths = [16]
 max_svals = [1]
 
@@ -68,8 +70,8 @@ for p_emb, n_task, max_sval, noise, n_head, n_width, n_layer, length in itertool
                             return_final_logits_only=False,
                             n_out=n_dims),
             train_args={'train_iters': train_iters, 'test_iters': 1, 'test_every': 1000},
-            train_task=KalmanFilterTask(length=length, n_tasks=n_tasks, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, seed=seed),
-            test_task=KalmanFilterTask(length=length, n_tasks=n_tasks, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, batch_size=1024, seed=seed),
+            train_task=KalmanFilterTask(length=length, n_tasks=n_task, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, seed=seed),
+            test_task=KalmanFilterTask(length=length, n_tasks=n_task, n_dims=n_dims, max_sval=max_sval, t_noise=noise, o_noise=noise, batch_size=1024, seed=seed),
         )
     ])
 
