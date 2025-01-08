@@ -125,11 +125,13 @@ g.figure.tight_layout()
 
 sns.move_legend(g, "upper left", bbox_to_anchor=(0.45, 1.1))
 
-plt.savefig('fig/transformer_vs_kalman_sample.png')
+# plt.savefig('fig/transformer_vs_kalman_sample.png')
+plt.savefig('fig/nope_pos_enc.svg')
+plt.savefig('fig/nope_pos_enc.pdf')
 
 # <codecell>
 ### LARGE SWEEP
-df = collate_dfs('remote/1_kalman/generalize')
+df = collate_dfs('remote/1_kalman/generalize/set6_final_sweep_except_head')
 df
 
 # <codecell>
@@ -219,7 +221,8 @@ gs.set_ylabels('MSE')
 gs.set_titles("{row_name} Layers, {col_name} Heads")
 
 gs.legend.set_title(None)
-# plt.savefig('fig/head_layer_sweep.png')
+plt.savefig('fig/head_layer_sweep.svg')
+plt.savefig('fig/head_layer_sweep.pdf')
 
 
 # <codecell>
@@ -263,7 +266,9 @@ gs.set_titles(r"$\sigma^2 = {col_name}$")
 gs.legend.set_title(None)
 
 gs.tight_layout()
-plt.savefig('fig/noise_sweep.png', bbox_inches='tight')
+# plt.savefig('fig/noise_sweep.png', bbox_inches='tight')
+plt.savefig('fig/noise_sweep.svg', bbox_inches='tight')
+plt.savefig('fig/noise_sweep.pdf', bbox_inches='tight')
 
 # <codecell>
 # Fixed vs. varying AC and max SV
@@ -307,7 +312,9 @@ gs.axes[1,0].set_ylabel('MSE (fixed AC)')
 gs.legend.set_title(None)
 
 gs.tight_layout()
-plt.savefig('fig/varying_ac_compare.png', bbox_inches='tight')
+# plt.savefig('fig/varying_ac_compare.png', bbox_inches='tight')
+plt.savefig('fig/varying_ac_compare.pdf', bbox_inches='tight')
+plt.savefig('fig/varying_ac_compare.svg', bbox_inches='tight')
 
 # <codecell>
 # impact of positional embeddings
@@ -357,7 +364,9 @@ g.figure.set_size_inches(5.5, 3.5)
 g.figure.tight_layout()
 
 sns.move_legend(g, "lower left", bbox_to_anchor=(1, 0))
-plt.savefig('fig/sinus_pos_enc.png', bbox_inches='tight')
+# plt.savefig('fig/sinus_pos_enc.png', bbox_inches='tight')
+plt.savefig('fig/sinus_pos_enc.svg', bbox_inches='tight')
+plt.savefig('fig/sinus_pos_enc.pdf', bbox_inches='tight')
 
 # <codecell>
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', 
@@ -462,8 +471,8 @@ test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_
 
 
 config = TransformerConfig(n_layers=1,
-                           n_hidden=2048,
-                           pos_emb=True,
+                           n_hidden=512,
+                           pos_emb=False,
                            n_mlp_layers=0,
                            n_heads=1,
                            layer_norm=False,
@@ -530,7 +539,7 @@ plt.plot(kalman_mse, '--o', label='kalman', alpha=0.7)
 plt.axvline(x=14, linestyle='dashed', color='gray')
 
 plt.legend()
-# plt.yscale('log')
+plt.yscale('log')
 plt.xlabel('time')
 plt.ylabel('mse')
 plt.tight_layout()
@@ -640,21 +649,26 @@ low_idx = int(0.025 * len(all_ms))
 hi_idx = int(0.975 * len(all_ms))
 all_ms = all_ms[low_idx:hi_idx]
 
+np.random.shuffle(all_ms)
+
 for m_sel in all_ms:
-    plt.plot(vals, m_sel * vals, color='thistle', alpha=0.1)
+    plt.plot(vals, m_sel * vals, color='lightpink', alpha=0.05)
 
 m = np.mean(all_ms)
 
 plt.plot(vals, m * vals, color='red', alpha=0.5)
 plt.scatter(big_mat_vals, kal_mat_vals, alpha=0.03, s=1)
 
-plt.text(-0.17, 0.1, f'$r^2 = {r2:.2f}$', color='red', fontsize=10)
+# plt.text(-0.17, 0.1, f'$r^2 = {r2:.2f}$', color='red', fontsize=10)
+plt.text(-0.17, 0.1, f'$r^2 = 0.86$', color='red', fontsize=10)
 
 plt.xlabel('Transformer coefficients')
 plt.ylabel('Kalman coefficients')
 
 plt.tight_layout()
 plt.savefig('fig/transformer_vs_kalman_reg_coeff.png')
+plt.savefig('fig/transformer_vs_kalman_reg_coeff.svg')
+plt.savefig('fig/transformer_vs_kalman_reg_coeff.pdf')
 
 
 # <codecell>
