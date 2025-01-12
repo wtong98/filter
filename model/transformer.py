@@ -35,6 +35,7 @@ class TransformerConfig:
     n_out: int = 1
     max_len: int = 1024
     pos_emb: bool = True
+    pos_emb_concat_dim: int | None = None
     use_last_index_output: bool = False
     softmax_att: bool = True
     layer_norm: bool = True
@@ -113,13 +114,22 @@ class AddPositionEmbs(nn.Module):
         assert inputs.ndim == 3, ('Number of dimensions should be 3,'
                                  ' but it is: %d' % inputs.ndim)
         length = inputs.shape[1]
-        pos_emb_shape = (1, config.max_len, inputs.shape[-1])
+
+        d = config.pos_emb_concat_dim
+        if d is None:
+            d = inputs.shape[-1]
+
+        pos_emb_shape = (1, config.max_len, d)
         pos_embedding = sinusoidal_init(max_len=config.max_len)(None,
                                                                 pos_emb_shape,
                                                                 None)
-        
         pe = pos_embedding[:, :length, :]
-        return inputs + pe
+
+        if config.pos_emb_concat_dim is None:
+            return inputs + pe
+        else:
+            pe = jnp.repeat(pe, inputs.shape[0], axis=0)
+            return jnp.concatenate((inputs, pe), axis=-1)
 
 
 class SimpleSelfAttention(nn.Module):
