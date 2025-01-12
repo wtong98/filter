@@ -1,18 +1,20 @@
 """ICL time series learning"""
 
 # <codecell>
+import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import special_ortho_group
 
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=1, max_sval=1, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
+    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=1, max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
         self.n_obs_dims = n_obs_dims
         self.n_tasks = n_tasks
         self.max_sval = max_sval
+        self.o_mult = o_mult
         self.t_noise = t_noise
         self.o_noise = o_noise
         self.batch_size = batch_size
@@ -25,7 +27,7 @@ class KalmanFilterTask:
 
         self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
         self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
-        self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims)
+        self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims) * self.o_mult
         # self.o_mat = self.o_mat / np.linalg.norm(self.o_mat, ord=2) * self.max_sval
 
         self.rng = np.random.default_rng(None)
@@ -133,66 +135,19 @@ def pred_kalman(xs, task, return_mat=False):
     else:
         return preds, all_true_mse
 
-# <codecell>
-# noise = 0.1
-# task = KalmanFilterTask(batch_size=1024, length=60, t_noise=noise, o_noise=noise, n_dims=40, n_tasks=1)
-# xs = next(task)
-# preds, all_true_mse = pred_kalman(xs, task)
 
-# preds = preds[:,:-1]
-# xs = xs[:,1:]
+# ns = [1e-5, 1, 1e3, 1e6]
+# max_svals = [0.1, 1, 10]
 
-# k_mse = ((preds - xs)**2).mean(axis=(0, -1))
-# z_mse = (xs**2).mean(axis=(0, -1))
+# fig, axs = plt.subplots(3, 4, figsize=(8, 6))
+# for ax, (sval, noise) in zip(axs.ravel(), itertools.product(max_svals, ns)):
+#     task = KalmanFilterTask(length=16, n_dims=512, n_obs_dims=32, t_noise=noise, o_noise=noise, max_sval=sval)
+#     xs = next(task)
+#     _, mat = pred_kalman(xs, task, return_mat=True)
 
-# mse = [np.trace(m) / task.n_dims for m in all_true_mse]
+#     ax.imshow(np.abs(mat))
+#     ax.set_title(f'ns={noise}, sv={sval}')
 
-# plt.plot(k_mse, 'o--', label='empirical')
-# plt.plot(mse[1:], '--', label='true')
-# plt.legend()
-
-# <codecell>
-
-
-# preds, Ms, Ns, C = pred_kalman(xs, task, return_mat=True)
-# preds, kalman_mat = pred_kalman(xs, task, return_mat=True)
-
-# kalman_mat = []
-# for i in range(xs.shape[1]):
-#     row = []
-#     for t in range(i):
-#         cum_mat = Ns[t]
-#         for j in range(t+1, i):
-#             cum_mat = Ms[j] @ cum_mat
-#         row.append(C @ cum_mat)
-#     kalman_mat.append(row)
-
-#     while len(row) < xs.shape[1] - 1:
-#         row.append(np.zeros((C.shape[0], C.shape[0])))
-    
-# kalman_mat = kalman_mat[1:]
-# kalman_mat = np.block(kalman_mat)
-# kalman_mat.shape
-
-# xs_start = xs[:,:-1]
-# xs_start = xs_start.reshape((xs.shape[0], -1))
-# xs_pred = kalman_mat @ xs_start.T
-
-# xs_pred = xs_pred.T.reshape(xs.shape[0], -1, 1)
-# xs_pred.shape
-
-# preds = preds[:,:-1]
-
-# np.mean((preds - xs_pred)**2)
-
-
-# xs = xs[:,1:]
-# preds = preds[:,:-1]
-
-# k_mse = ((xs - preds)**2).mean(axis=(0, -1))
-# z_mse = ((xs)**2).mean(axis=(0, -1))
-
-# print(k_mse)
-# print(z_mse)
-
-
+# fig.tight_layout()
+# plt.savefig('../experiment/fig/kalman_sweep.png')
+# %%

@@ -24,23 +24,24 @@ set_theme()
 
 # <codecell>
 length = 16
-n_dims = 128
+n_dims = 32
 n_obs_dims = 32
+n_layers = 1
 
-noise = 0.05
+noise = 0.1
 
 seed = new_seed()
-train_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=2)
-test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=2)
+train_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=1)
+test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=1)
 
 
-config = TransformerConfig(n_layers=1,
+config = TransformerConfig(n_layers=n_layers,
                            n_hidden=512,
-                           pos_emb=True,
+                           pos_emb=False,
                            n_mlp_layers=0,
                            n_heads=1,
                            layer_norm=False,
-                           residual_connections=False,
+                           residual_connections=True,
                            freeze_emb=False,
                            return_final_logits_only=False,
                         #    use_simple_att=True,
@@ -57,7 +58,7 @@ config = TransformerConfig(n_layers=1,
 state, hist = train(config,
                     data_iter=iter(train_task), 
                     test_iter=iter(test_task), 
-                    test_every=500,
+                    test_every=1000,
                     train_iters=5_000, 
                     seed=None)
 
@@ -69,10 +70,15 @@ train_task.length = 64
 xs = next(train_task)
 pred = state.apply_fn({'params': state.params}, xs)
 
+
+# xs = np.linalg.norm(xs, axis=-1)
+# pred = np.linalg.norm(pred, axis=-1)
+
 pred_naive = xs[:,:-1]
 pred = pred[:,:-1]
 
 train_task.n_tasks = 1
+# xs_k = next(train_task)
 xs_k = xs
 pred_k, _ = pred_kalman(xs_k, train_task)
 xs_k = xs_k[:,1:]
@@ -84,6 +90,11 @@ pred_mse = ((xs - pred)**2).mean(axis=(0, -1))
 naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
 zero_mse = (xs**2).mean(axis=(0, -1))
 kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
+
+# normalize by magnitude
+# pred_mse /= zero_mse
+# kalman_mse /= zero_mse
+# zero_mse /= zero_mse
 
 plt.plot(pred_mse[1:], '--o', label='pred', alpha=0.7)
 # plt.plot(naive_mse, '--o', label='naive', alpha=0.7)
@@ -98,7 +109,7 @@ plt.xlabel('time')
 plt.ylabel('mse')
 plt.tight_layout()
 
-plt.savefig('fig/extrapolation_pos_enc.png')
+# plt.savefig('fig/extrapolation_4_layer.png')
 
 # <codecell>
 train_task.n_tasks = 1
@@ -108,77 +119,55 @@ train_task.length = 16
 xs = next(train_task)
 pred, info = state.apply_fn({'params': state.params}, xs, mutable='intermediates')
 
-att = info['intermediates']['TransformerBlock_0']['MultiHeadDotProductAttention_0']['attention_weights'][0].squeeze()
+atts = [info['intermediates'][f'TransformerBlock_{i}']['MultiHeadDotProductAttention_0']['attention_weights'][0].squeeze() for i in range(n_layers)]
 
-fig, axs = plt.subplots(2, 4, figsize=(12, 6))
+for i, att in enumerate(atts):
+    fig, axs = plt.subplots(1, 4, figsize=(12, 3))
 
-for ax, a in zip(axs.ravel(), att):
-    im = ax.imshow(a)
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    for ax, a in zip(axs.ravel(), att):
+        im = ax.imshow(a)
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
-plt.tight_layout()
-plt.savefig('fig/attention_pos_enc.png')
+    plt.tight_layout()
+    # plt.savefig(f'fig/attention_{i}.png')
+    # plt.clf()
+
 
 # <codecell>
-jax.tree.map(lambda x: x.shape, state.params)
-
 E = state.params['Dense_0']['kernel']
 D = state.params['Dense_1']['kernel']
-V = state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['value']['kernel'].squeeze()
-O = state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['out']['kernel'].squeeze()
+M = E
 
-M = (E @ V @ O @ D)
+for i in range(n_layers):
+    V = state.params[f'TransformerBlock_{i}']['MultiHeadDotProductAttention_0']['value']['kernel'].squeeze()
+    O = state.params[f'TransformerBlock_{i}']['MultiHeadDotProductAttention_0']['out']['kernel'].squeeze()
+    M = M @ V @ O
+M = M @ D
 
-ps = xs @ M
-ps.shape
+# Ms = []
+# for i in range(n_layers):
+#     M_c = np.array(atts[i][:,:,None,:,None] * M.T[None, None, :, None, :])
+#     big_d = train_task.length * train_task.n_dims
+#     M_c = M_c.reshape((train_task.batch_size, big_d, big_d))
+#     Ms.append(M_c)
 
-att.shape
+# # <codecell>
+# plt.imshow(np.abs(Ms[0][9]))
+# # plt.imshow(atts[0][9])
 
-ps = jnp.einsum('bqk,bkd->...bqd', att, ps)
+# # <codecell>
+# xs_long = xs.reshape(xs.shape[0], -1, 1)
+# ps_long = Ms[1] @ Ms[0] @ xs_long
+# ps = ps_long.reshape(ps_long.shape[0], train_task.length, train_task.n_dims)
+
+full_att = atts[1] @ atts[0]
+ps = full_att @ xs @ M
 
 print(pred[0,0])
 print(ps[0,0])
 
 np.mean((pred - ps)**2)
 
-# <codecell>
-jax.tree.map(np.shape, state.params)
-K = state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['key']['kernel'].squeeze()
-Q = state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['query']['kernel'].squeeze()
-
-plt.imshow(np.abs(K))
-plt.imshow(np.abs(Q))
-np.mean(Q**2)
-
-fig, axs = plt.subplots(1, 3, figsize=(6, 2))
-axs[0].imshow(np.abs(K))
-axs[0].set_title('Abs K')
-axs[1].imshow(np.abs(Q))
-axs[1].set_title('Abs Q')
-axs[2].imshow(np.abs(K.T @ Q))
-axs[2].set_title('Abs K^T Q')
-
-fig.tight_layout()
-plt.savefig('fig/raw_attention_mats.png')
-
-# <codecell>
-np.mean(np.diag(np.abs(K)))
-
-# <codecell>
-K_rand = np.random.randn(*K.shape) / np.sqrt(K.shape[0])
-var_ratio = np.mean(K**2) / np.mean(K_rand**2)
-K_rand = 3 * np.sqrt(var_ratio) * K_rand
-Q_rand = K_rand
-
-state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['key']['kernel'] = K_rand[:,None,:]
-state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['query']['kernel'] = Q_rand[:,None,:]
-print(state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['query']['kernel'])
-print(state.params['TransformerBlock_0']['MultiHeadDotProductAttention_0']['key']['kernel'])
-
-pred, info = state.apply_fn({'params': state.params}, xs, mutable='intermediates')
-att = info['intermediates']['TransformerBlock_0']['MultiHeadDotProductAttention_0']['attention_weights'][0].squeeze()
-
-plt.imshow(att[0])
 
 # <codecell>
 idx = 0
@@ -191,7 +180,7 @@ all_ms = []
 
 for idx in tqdm(range(xs.shape[0])):
     x = xs[idx][:-1]
-    A = att[idx]  # TODO: attention is the key (or rather, is irrelevant) <-- STOPPED HERE
+    A = full_att[idx]
 
     big_mat = []
     for i in range(A.shape[0] - 1):
@@ -277,7 +266,7 @@ for run_id in range(3):
 
     for idx in tqdm(range(xs.shape[0])):
         x = xs[idx][:-1]
-        A = att[idx]
+        A = full_att[idx]
 
         big_mat = []
         for i in range(A.shape[0] - 1):
@@ -350,13 +339,13 @@ for run_id in range(3):
     axs[run_id].set_title(name)
 
 fig.tight_layout()
-plt.savefig('fig/transformer_v_kalman_vary_att_small_obs.png')
+plt.savefig('fig/transformer_v_kalman_vary_att_2_layer.png')
 
 # <codecell>
 plt.title('Abs Kalman Matrix')
 plt.imshow(np.abs(kalman_mat))
 plt.colorbar()
-plt.savefig('fig/kalman_mat_small_obs.png')
+plt.savefig('fig/kalman_mat.png')
 
 # <codecell>
 def pred_kalman(xs, task, return_mat=False):
