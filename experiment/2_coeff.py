@@ -24,19 +24,19 @@ set_theme()
 
 # <codecell>
 length = 16
-n_dims = 128
+n_dims = 32
 n_obs_dims = 32
 
-noise = 0.05
+noise = 0.1
 
 seed = new_seed()
-train_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=2)
-test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=2)
+train_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=1)
+test_task = KalmanFilterTask(length=length, n_obs_dims=n_obs_dims, n_tasks=1, n_dims=n_dims, t_noise=noise, o_noise=noise, seed=seed, max_sval=1)
 
 
 config = TransformerConfig(n_layers=1,
-                           n_hidden=512,
-                           pos_emb=True,
+                           n_hidden=256,
+                           pos_emb=False,
                            n_mlp_layers=0,
                            n_heads=1,
                            layer_norm=False,
@@ -57,13 +57,13 @@ config = TransformerConfig(n_layers=1,
 state, hist = train(config,
                     data_iter=iter(train_task), 
                     test_iter=iter(test_task), 
-                    test_every=500,
+                    test_every=1000,
                     train_iters=5_000, 
                     seed=None)
 
 # <codecell>
 train_task.n_tasks = 1
-train_task.batch_size = 128
+train_task.batch_size = 4096
 train_task.length = 64
 
 xs = next(train_task)
@@ -98,7 +98,7 @@ plt.xlabel('time')
 plt.ylabel('mse')
 plt.tight_layout()
 
-plt.savefig('fig/extrapolation_pos_enc.png')
+# plt.savefig('fig/extrapolation_pos_enc.png')
 
 # <codecell>
 train_task.n_tasks = 1
@@ -115,9 +115,11 @@ fig, axs = plt.subplots(2, 4, figsize=(12, 6))
 for ax, a in zip(axs.ravel(), att):
     im = ax.imshow(a)
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    ax.set_xlabel('Key index')
+    ax.set_ylabel('Time')
 
-plt.tight_layout()
-plt.savefig('fig/attention_pos_enc.png')
+fig.tight_layout()
+plt.savefig('fig/final_report/attention_markov.svg')
 
 # <codecell>
 jax.tree.map(lambda x: x.shape, state.params)
@@ -341,16 +343,16 @@ for run_id in range(3):
     axs[run_id].set_ylabel('Kalman coefficients')
 
     if run_id == 0:
-        name = 'Original att'
+        name = 'Original'
     elif run_id == 1:
-        name = 'Diagonal only'
+        name = 'Diagonal'
     elif run_id == 2:
-        name = 'Identity att'
+        name = 'Identity'
     
     axs[run_id].set_title(name)
 
 fig.tight_layout()
-plt.savefig('fig/transformer_v_kalman_vary_att_small_obs.png')
+plt.savefig('fig/final_report/transformer_v_kalman.png')
 
 # <codecell>
 plt.title('Abs Kalman Matrix')

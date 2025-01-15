@@ -8,7 +8,7 @@ from scipy.stats import special_ortho_group
 
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=1, max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, batch_size=128, seed=None) -> None:
+    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=1, max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, cheat_mode=False, batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
         self.n_obs_dims = n_obs_dims
@@ -17,6 +17,7 @@ class KalmanFilterTask:
         self.o_mult = o_mult
         self.t_noise = t_noise
         self.o_noise = o_noise
+        self.cheat_mode = cheat_mode
         self.batch_size = batch_size
         self.seed = seed
 
@@ -39,6 +40,7 @@ class KalmanFilterTask:
             self.n_obs_dims = self.n_dims
 
         zs = np.random.randn(self.batch_size, self.n_dims, 1) / np.sqrt(self.n_dims)
+        zs_init = np.copy(zs)
 
         t_mat = self.t_mat
         o_mat = self.o_mat
@@ -57,7 +59,11 @@ class KalmanFilterTask:
             xs_all.append(xs)
         
         xs_all = np.stack(xs_all, axis=1)[...,0]
-        return xs_all
+
+        if self.cheat_mode:
+            return xs_all, zs_init
+        else:
+            return xs_all
 
     def __iter__(self):
         return self
