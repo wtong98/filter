@@ -640,7 +640,7 @@ big_mat_vals = big_mat_mean[~np.isclose(kalman_mat, 0)]
 kal_mat_vals = kalman_mat[~np.isclose(kalman_mat, 0)]
 
 # m = np.linalg.lstsq(big_mat_vals[:,None], kal_mat_vals)[0]
-r2 = np.corrcoef(big_mat_vals, kal_mat_vals)[0,1]**2
+r2 = np.corrcoef(big_mat_vals, kal_mat_vals)[0,1]
 
 vals = np.linspace(-0.2, 0.2, 500)
 
@@ -660,15 +660,15 @@ plt.plot(vals, m * vals, color='red', alpha=0.5)
 plt.scatter(big_mat_vals, kal_mat_vals, alpha=0.03, s=1)
 
 # plt.text(-0.17, 0.1, f'$r^2 = {r2:.2f}$', color='red', fontsize=10)
-plt.text(-0.17, 0.1, f'$r^2 = 0.86$', color='red', fontsize=10)
+plt.text(-0.17, 0.1, f'$r = 0.93$', color='red', fontsize=10)
 
 plt.xlabel('Transformer coefficients')
 plt.ylabel('Kalman coefficients')
 
 plt.tight_layout()
-plt.savefig('fig/transformer_vs_kalman_reg_coeff.png')
-plt.savefig('fig/transformer_vs_kalman_reg_coeff.svg')
-plt.savefig('fig/transformer_vs_kalman_reg_coeff.pdf')
+plt.savefig('fig/transformer_vs_kalman_reg_coeff_r.png')
+plt.savefig('fig/transformer_vs_kalman_reg_coeff_r.svg')
+plt.savefig('fig/transformer_vs_kalman_reg_coeff_r.pdf')
 
 
 # <codecell>

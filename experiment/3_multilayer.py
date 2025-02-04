@@ -26,7 +26,7 @@ set_theme()
 length = 16
 n_dims = 32
 n_obs_dims = 32
-n_layers = 1
+n_layers = 2
 
 noise = 0.1
 

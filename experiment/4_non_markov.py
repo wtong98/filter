@@ -65,14 +65,14 @@ config_pe = TransformerConfig(n_layers=1,
                         #    use_simple_att=True,
                            n_out=n_obs_dims)
 
-config_1h = TransformerConfig(n_layers=1,
+config_1h = TransformerConfig(n_layers=2,
                            n_hidden=n_hidden,
                            pos_emb=False,
                         #    pos_emb_concat_dim=n_hidden,
                            n_mlp_layers=0,
                            n_heads=1,
                            layer_norm=False,
-                           residual_connections=False,
+                           residual_connections=True,
                            freeze_emb=False,
                            return_final_logits_only=False,
                         #    use_simple_att=True,
@@ -180,7 +180,7 @@ def pred_kalman(xs, task, zs_init=None, return_mat=False):
 
 train_task.n_tasks = 1
 train_task.batch_size = 4096
-train_task.length = 32
+train_task.length = 64
 train_task.cheat_mode = True
 
 xs, zs_init = next(train_task)
@@ -211,8 +211,8 @@ naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
 zero_mse = (xs**2).mean(axis=(0, -1))
 kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
 
-plt.plot(pred_1h_mse[:], '--o', label='Transformer (NoPE, $H=1$)', alpha=0.7, color='C0')
 plt.plot(pred_mse[:], '--o', label='Transformer (NoPE, $H=4$)', alpha=0.7, color='C9')
+plt.plot(pred_1h_mse[:], '--o', label='Transformer (NoPE, $H=1, \ell=2$)', alpha=0.7, color='C0')
 plt.plot(pred_pe_mse[:], '--o', label='Transformer (PE, $H=4$)', alpha=0.7, color='mediumseagreen')
 # plt.plot(naive_mse, '--o', label='naive', alpha=0.7)
 plt.plot(kalman_mse[:], '--o', label='Kalman', alpha=0.7, color='C1')
@@ -221,13 +221,13 @@ plt.plot(zero_mse[:], '--o', label='Zero', alpha=0.7, color='C8')
 
 plt.axvline(x=14, linestyle='dashed', color='gray')
 
-plt.legend()
+plt.legend(bbox_to_anchor=(1,1))
 plt.yscale('log')
 plt.xlabel('Time')
 plt.ylabel('MSE')
 plt.tight_layout()
 
-plt.savefig('fig/final_report/extrapolation_non_markov.svg')
+plt.savefig('fig/extrapolation_non_markov.png', bbox_inches='tight')
 
 # <codecell>
 plt.plot(pred[0,:,0], 'o--', alpha=0.7, label='Transformer')
