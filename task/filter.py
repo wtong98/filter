@@ -6,18 +6,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import special_ortho_group
 
+import sys
+sys.path.append('../')
+from common import t as tp
+
 
 class KalmanFilterTask:
-    def __init__(self, length=8, n_dims=8, n_obs_dims=None, n_tasks=1, max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, cheat_mode=False, batch_size=128, seed=None) -> None:
+    def __init__(self, length=8, n_dims=8, n_obs_dims=None, 
+                 mode=None, n_tasks=1, 
+                 max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, 
+                 batch_size=128, seed=None) -> None:
         self.length = length
         self.n_dims = n_dims
         self.n_obs_dims = n_obs_dims
+        self.mode = mode
         self.n_tasks = n_tasks
         self.max_sval = max_sval
         self.o_mult = o_mult
         self.t_noise = t_noise
         self.o_noise = o_noise
-        self.cheat_mode = cheat_mode
         self.batch_size = batch_size
         self.seed = seed
 
@@ -60,29 +67,58 @@ class KalmanFilterTask:
         
         xs_all = np.stack(xs_all, axis=1)[...,0]
 
-        if self.cheat_mode:
+        if self.mode == 'cheat':
             return xs_all, zs_init
-        else:
-            return xs_all
+        elif self.mode == 'ac':
+            assert len(t_mat.shape) == 3
+
+            xs_full = np.zeros((self.batch_size, self.n_dims + self.n_obs_dims + self.length, self.n_dims + self.n_obs_dims))
+            xs_full[:, :self.n_dims, self.n_obs_dims:] = t_mat
+            xs_full[:, self.n_dims:(self.n_dims+self.n_obs_dims), self.n_obs_dims:] = o_mat
+            xs_full[:, -self.length:, :self.n_obs_dims] = xs_all
+
+            xs_all = xs_full
+
+        return xs_all
 
     def __iter__(self):
         return self
 
 
-# task = KalmanFilterTask(max_sval=1.5, length=16, batch_size=32, n_tasks=None, n_obs_dims=1, o_noise=0.001, t_noise=0.001)
+# task = KalmanFilterTask(
+#     mode='ac',
+#     max_sval=1.5, 
+#     length=16, 
+#     batch_size=32, 
+#     n_tasks=None, 
+#     n_dims=4, n_obs_dims=1,
+#     o_noise=0.001, 
+#     t_noise=0.001)
+
 # xs = next(task)
 
-# plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
+# # plt.plot(np.linalg.norm(xs, axis=-1).T, '--o')
 
-# xs.shape
+# np.round(xs[0], decimals=2)
 
-# <codecell>
-def pred_kalman(xs, task, return_mat=False):
+# mask = (xs[...,0] != 0)
+# np.expand_dims(mask, axis=-1).shape
+
+def mat_vec_prod(M, v):
+    if len(M.shape) == 2:
+        return M @ v
+    else:
+        return np.einsum('bij,jb->ib', M, v)
+
+
+def pred_kalman(xs, task, A=None, C=None, return_mat=False):
     I = np.eye(task.n_dims)
     Io = np.eye(task.n_obs_dims)
 
-    A = task.t_mat
-    C = task.o_mat
+    if A is None or C is None:
+        A = task.t_mat
+        C = task.o_mat
+
     S_u = I * task.t_noise / task.n_dims
     S_w = Io * task.o_noise / task.n_obs_dims
 
@@ -97,18 +133,19 @@ def pred_kalman(xs, task, return_mat=False):
     for i in range(xs.shape[1]):
         y = xs[:,i].T
 
-        L = Sa @ C.T @ np.linalg.pinv(C @ Sa @ C.T + S_w)
+        L = Sa @ tp(C) @ np.linalg.pinv(C @ Sa @ tp(C) + S_w)
 
-        bp = (I - L @ C) @ ba + L @ y
+        bp = mat_vec_prod((I - L @ C), ba) + mat_vec_prod(L, y)
         Sp = (I - L @ C) @ Sa
 
-        ba = A @ bp
-        Sa = A @ Sp @ A.T + S_u
+        ba = mat_vec_prod(A, bp)
+        Sa = A @ Sp @ tp(A) + S_u
 
-        true_mse = np.trace(C @ Sa @ C.T + S_w) / task.n_dims
+        true_mse = np.trace(C @ Sa @ tp(C) + S_w, axis1=-2, axis2=-1).mean() / task.n_dims
+
         all_true_mse.append(true_mse)
 
-        obs = C @ ba
+        obs = mat_vec_prod(C, ba)
         preds.append(obs.T)
 
         M = A @ (I - L @ C)
@@ -141,6 +178,35 @@ def pred_kalman(xs, task, return_mat=False):
     else:
         return preds, all_true_mse
 
+
+# task = KalmanFilterTask(
+#     # n_tasks=1,
+#     n_tasks=None,
+#     mode='ac',
+#     n_obs_dims=8, 
+#     max_sval=1,
+#     n_dims=8,
+#     length=32,
+#     t_noise=0.05,
+#     o_noise=0.05,
+#     batch_size=512)
+
+# xs = next(task)
+# t_mats = xs[:,:8,8:]
+# o_mats = xs[:,8:16,8:]
+# xs = xs[:,16:,:8]
+
+# xs_pred, true_mse = pred_kalman(xs, task, A=t_mats, C=o_mats)
+# # xs_pred, true_mse = pred_kalman(xs, task)
+
+# mse = ((xs[:,1:] - xs_pred[:,:-1])**2).mean(axis=(0, -1))
+# zer = ((xs[:, 1:])**2).mean(axis=(0, -1))
+
+# idx = 2
+
+# plt.plot(mse[idx:], '--o')
+# plt.plot(true_mse[idx:], '--o')
+# plt.plot(zer[idx:], '--o')
 
 # ns = [1e-5, 1, 1e3, 1e6]
 # max_svals = [0.1, 1, 10]

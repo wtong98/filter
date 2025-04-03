@@ -41,7 +41,7 @@ config = TransformerConfig(n_layers=n_layers,
                            n_mlp_layers=0,
                            n_heads=1,
                            layer_norm=False,
-                           residual_connections=True,
+                           residual_connections=False,
                            freeze_emb=False,
                            return_final_logits_only=False,
                         #    use_simple_att=True,
@@ -163,6 +163,7 @@ M = M @ D
 full_att = atts[1] @ atts[0]
 ps = full_att @ xs @ M
 
+
 print(pred[0,0])
 print(ps[0,0])
 
@@ -170,10 +171,7 @@ np.mean((pred - ps)**2)
 
 
 # <codecell>
-idx = 0
-
 dists = []
-
 big_d = (xs.shape[1] - 1) * xs.shape[2]
 big_mats_acc = np.zeros((big_d, big_d))
 all_ms = []

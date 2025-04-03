@@ -82,8 +82,19 @@ def wrap_autoreg(loss_func):
 
     def autoreg_loss(pred_xs, xs):
         xs = xs[:,1:]
+
+        # mask out zero predictions
+        mask = (xs[...,0] != 0)
+        mask = jnp.expand_dims(mask, axis=-1)
+        xs = xs[...,:pred_xs.shape[-1]]
+        
         pred_xs = pred_xs[:,:-1]
-        return loss_func(xs, pred_xs).mean()
+
+        out = loss_func(xs, pred_xs)
+        res = jnp.sum(out * mask)
+        total = jnp.sum(mask) * pred_xs.shape[-1]
+        return res / total
+
 
     return autoreg_loss
 
