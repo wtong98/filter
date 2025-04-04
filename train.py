@@ -224,16 +224,16 @@ class Case:
         xs = next(task)
         pred = self.state.apply_fn({'params': self.state.params}, xs)
 
-        pred_naive = xs[:,:-1]
-        xs = xs[:,1:]
-        pred = pred[:,:-1]
+        pred_vals = pred[:,(task.n_dims + task.n_obs_dims):, :task.n_obs_dims]
+        xs_vals = xs[:,(task.n_dims + task.n_obs_dims):, :task.n_obs_dims]
+
+        xs = xs_vals[:,1:]
+        pred = pred_vals[:,:-1]
 
         pred_mse = ((xs - pred)**2).mean(axis=(0, -1))
-        naive_mse = ((xs - pred_naive)**2).mean(axis=(0, -1))
         zero_mse = (xs**2).mean(axis=(0, -1))
 
         self.info['pred_mse'] = pred_mse
-        self.info['naive_mse'] = naive_mse
         self.info['zero_mse'] = zero_mse
 
 

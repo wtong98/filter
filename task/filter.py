@@ -13,14 +13,16 @@ from common import t as tp
 
 class KalmanFilterTask:
     def __init__(self, length=8, n_dims=8, n_obs_dims=None, 
-                 mode=None, n_tasks=1, 
+                 mode=None, n_tasks=1, n_snaps=None,
                  max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, 
                  batch_size=128, seed=None) -> None:
+        
         self.length = length
         self.n_dims = n_dims
         self.n_obs_dims = n_obs_dims
         self.mode = mode
         self.n_tasks = n_tasks
+        self.n_snaps = n_snaps
         self.max_sval = max_sval
         self.o_mult = o_mult
         self.t_noise = t_noise
@@ -72,6 +74,22 @@ class KalmanFilterTask:
         elif self.mode == 'ac':
             assert len(t_mat.shape) == 3
 
+            if self.n_snaps is not None:
+                zs_all = []
+                zs = np.random.randn(self.batch_size, self.n_dims, 1) / np.sqrt(self.n_dims)
+                for _ in range(self.n_snaps):
+                    zs = t_mat @ zs + np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.t_noise / self.n_dims)
+                    zs_all.append(zs)
+                
+                zs_all = np.stack(zs_all, axis=1).squeeze()
+                V_pre = zs_all[:,:-1]
+                V_post = zs_all[:,1:]
+
+                V_pre_inv = np.linalg.pinv(V_pre)
+                t_mat_est = tp(V_pre_inv @ V_post)
+                # print(np.round(t_mat[0], decimals=2))
+                t_mat = t_mat_est
+
             xs_full = np.zeros((self.batch_size, self.n_dims + self.n_obs_dims + self.length, self.n_dims + self.n_obs_dims))
             xs_full[:, :self.n_dims, self.n_obs_dims:] = t_mat
             xs_full[:, self.n_dims:(self.n_dims+self.n_obs_dims), self.n_obs_dims:] = o_mat
@@ -84,16 +102,39 @@ class KalmanFilterTask:
     def __iter__(self):
         return self
 
+# batch_size = 3
+# n_dims = 4
+# t_noise = 0.00001
+# n_snaps = 10
+
+# t_mat = np.random.randn(batch_size, n_dims, n_dims)
+# t_mat = t_mat / np.linalg.norm(t_mat, ord=2, keepdims=True, axis=(-2, -1))
+
+# zs_all = []
+# zs = np.random.randn(batch_size, n_dims, 1) / np.sqrt(n_dims)
+# for _ in range(n_snaps + 1):
+#     zs = t_mat @ zs + np.random.randn(batch_size, n_dims, 1) * np.sqrt(t_noise / n_dims)
+#     zs_all.append(zs)
+
+# zs_all = np.stack(zs_all, axis=1).squeeze()
+
+# V_pre = zs_all[:,:-1]
+# V_post = zs_all[:,1:]
+
+# V_pre_inv = np.linalg.pinv(V_pre)
+# t_mat_est = tp(V_pre_inv @ V_post)
+
 
 # task = KalmanFilterTask(
 #     mode='ac',
+#     n_snaps=32,
 #     max_sval=1.5, 
 #     length=16, 
 #     batch_size=32, 
 #     n_tasks=None, 
 #     n_dims=4, n_obs_dims=1,
-#     o_noise=0.001, 
-#     t_noise=0.001)
+#     o_noise=0.05, 
+#     t_noise=0.05)
 
 # xs = next(task)
 
@@ -103,6 +144,8 @@ class KalmanFilterTask:
 
 # mask = (xs[...,0] != 0)
 # np.expand_dims(mask, axis=-1).shape
+
+# <codecell>
 
 def mat_vec_prod(M, v):
     if len(M.shape) == 2:
