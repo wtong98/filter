@@ -23,9 +23,10 @@ run_split = 12
 train_iters = 20_000
 # n_layers = [1, 2, 4]
 n_layers = [1, 2, 4]
-n_widths = [2048]
+n_widths = [512]
 # n_heads = [1, 2]
 n_heads = [1, 2]
+n_mlp_layers = [0, 2]
 
 noises = [0.001, 0.01, 0.1]
 lengths = [16]
@@ -33,9 +34,9 @@ lengths = [16]
 pos_emb = [False]
 n_tasks = [None]
 
-n_snaps = [None, 4, 16, 64, 256]
-n_obs_dims = [4, 16]
-n_dims = 16
+n_snaps = [None, 4, 16]
+n_obs_dims = [2, 4]
+n_dims = 4
 
 ### START TEST CONFIGS
 # n_dims = 16
@@ -57,8 +58,8 @@ n_dims = 16
 
 all_cases = []
 
-for n_task, noise, n_head, n_width, n_layer, length, n_snap, n_obs_dim \
-    in itertools.product(n_tasks, noises, n_heads, n_widths, n_layers, lengths, n_snaps, n_obs_dims):
+for n_task, noise, n_head, n_width, n_layer, n_mlp_layer, length, n_snap, n_obs_dim \
+    in itertools.product(n_tasks, noises, n_heads, n_widths, n_layers, n_mlp_layers, lengths, n_snaps, n_obs_dims):
 
     seed = new_seed()
     all_cases.extend([
@@ -66,10 +67,10 @@ for n_task, noise, n_head, n_width, n_layer, length, n_snap, n_obs_dim \
             TransformerConfig(n_layers=n_layer,
                             n_hidden=n_width,
                             pos_emb=False,
-                            n_mlp_layers=0,
+                            n_mlp_layers=n_mlp_layer,
                             n_heads=n_head,
                             layer_norm=False,
-                            residual_connections=False,
+                            residual_connections=True,
                             freeze_emb=False,
                             return_final_logits_only=False,
                             n_out=n_dims),

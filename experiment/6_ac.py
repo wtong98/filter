@@ -20,20 +20,22 @@ from train import *
 from model.transformer import TransformerConfig, sinusoidal_init
 from task.filter import KalmanFilterTask, pred_kalman
 
+# <codecell>
+
 length = 16
-n_dims = 3
-n_obs_dims = 3
+n_dims = 4
+n_obs_dims = 4
 n_hidden = 256
 n_heads = 1
 n_layers = 2
 
-noise = 0.001
+noise = 0.0001
 
 seed = new_seed()
 
 train_task = KalmanFilterTask(length=length, 
                               mode='ac',
-                              n_snaps=9,
+                              n_snaps=None,
                               n_obs_dims=n_obs_dims, 
                               n_tasks=None, 
                               n_dims=n_dims, 
@@ -46,7 +48,7 @@ train_task = KalmanFilterTask(length=length,
 config = TransformerConfig(n_layers=n_layers,
                            n_hidden=n_hidden,
                            pos_emb=False,
-                           n_mlp_layers=0,
+                           n_mlp_layers=2,
                            n_heads=n_heads,
                            layer_norm=False,
                            residual_connections=True,
@@ -103,3 +105,81 @@ plt.ylabel('MSE')
 plt.tight_layout()
 
 # plt.savefig('fig/ac_low_noise_a3_c3_estA_low_snaps.png')
+
+# <codecell>
+df = collate_dfs('remote/6_ac/generalize/')
+df
+
+# # <codecell>
+# row = df.iloc[1]
+# task = row['train_task']
+# xs = next(task)
+
+# A = xs[:,:task.n_dims,task.n_obs_dims:]
+# C = xs[:,task.n_dims:(task.n_dims+task.n_obs_dims),task.n_obs_dims:]
+# xs_vals = xs[:,(task.n_dims + task.n_obs_dims):, :task.n_obs_dims]
+
+# xs_k = xs_vals
+# pred_k, true_mse = pred_kalman(xs_k, task, A=A, C=C)
+# xs_k = xs_k[:,1:]
+# pred_k = pred_k[:,:-1]
+
+# kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
+
+
+# <codecell>
+def extract_plot_vals(row):
+    time_len = len(row['info']['pred_mse'])
+
+    task = row['train_task']
+    xs = next(task)
+
+    A = xs[:,:task.n_dims,task.n_obs_dims:]
+    C = xs[:,task.n_dims:(task.n_dims+task.n_obs_dims),task.n_obs_dims:]
+    xs_vals = xs[:,(task.n_dims + task.n_obs_dims):, :task.n_obs_dims]
+
+    xs_k = xs_vals
+    pred_k, kalman_true_mse = pred_kalman(xs_k, task, A=A, C=C)
+    xs_k = xs_k[:,1:]
+    pred_k = pred_k[:,:-1]
+
+    kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
+
+    return pd.Series([
+        row['name'],
+        row['config']['n_layers'],
+        row['config']['n_heads'],
+        row['train_task'].n_snaps if row['train_task'].n_snaps is not None else 0,
+        row['train_task'].t_noise,
+        row['train_task'].n_obs_dims,
+        row['info']['pred_mse'],
+        row['info']['zero_mse'],
+        kalman_mse,
+        kalman_true_mse[:-1],
+        np.arange(time_len)
+    ], index=['name', 'n_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
+
+tqdm.pandas(desc='kalman read')
+
+plot_df = df.progress_apply(extract_plot_vals, axis=1)
+plot_df
+
+plot_df = plot_df \
+            .reset_index(drop=True) \
+            .explode(['pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time']) \
+            .melt(id_vars=['name', 'n_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'time'], var_name='mse_type', value_name='mse')
+plot_df['mse'] = plot_df['mse'].astype(float)
+
+plot_df
+
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['n_snaps'] == 16)
+    & (mdf['noise'] == 0.1)
+    & (mdf['n_obs_dims'] == 16)
+]
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line')
+gs.set(yscale='log')
