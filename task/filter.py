@@ -4,7 +4,7 @@
 import itertools
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import special_ortho_group
+from scipy.stats import ortho_group
 
 import sys
 sys.path.append('../')
@@ -14,7 +14,8 @@ from common import t as tp
 class KalmanFilterTask:
     def __init__(self, length=8, n_dims=8, n_obs_dims=None, 
                  mode=None, n_tasks=1, n_snaps=None,
-                 max_sval=1, o_mult=1, t_noise=0.05, o_noise=0.05, 
+                 max_sval=1, o_mult=1, 
+                 t_noise=0.05, o_noise=0.05, noise_dist='gauss',
                  batch_size=128, seed=None) -> None:
         
         self.length = length
@@ -27,6 +28,7 @@ class KalmanFilterTask:
         self.o_mult = o_mult
         self.t_noise = t_noise
         self.o_noise = o_noise
+        self.noise_dist = noise_dist
         self.batch_size = batch_size
         self.seed = seed
 
@@ -35,8 +37,9 @@ class KalmanFilterTask:
         if self.n_obs_dims is None:
             self.n_obs_dims = self.n_dims
 
-        self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
-        self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
+        # self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
+        # self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
+        self.t_mat = ortho_group.rvs(self.n_dims)
         self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims) * self.o_mult
         # self.o_mat = self.o_mat / np.linalg.norm(self.o_mat, ord=2) * self.max_sval
 
@@ -55,23 +58,42 @@ class KalmanFilterTask:
         o_mat = self.o_mat
 
         if self.n_tasks is None:
-            t_mat = self.rng.standard_normal((self.batch_size, self.n_dims, self.n_dims))
-            t_mat = t_mat / np.linalg.norm(t_mat, ord=2, keepdims=True, axis=(-2, -1)) * self.max_sval
+            # t_mat = self.rng.standard_normal((self.batch_size, self.n_dims, self.n_dims))
+            # t_mat = t_mat / np.linalg.norm(t_mat, ord=2, keepdims=True, axis=(-2, -1)) * self.max_sval
+            growth_fac = np.sqrt(1 + self.t_noise)
+            t_mat = ortho_group.rvs(self.n_dims, size=self.batch_size) / growth_fac
+
             # print(np.linalg.norm(t_mat, ord=2, axis=(-2, -1)))
-            o_mat = self.rng.standard_normal((self.batch_size, self.n_obs_dims, self.n_dims)) / np.sqrt(self.n_dims)
+            # o_mat = self.rng.standard_normal((self.batch_size, self.n_obs_dims, self.n_dims)) / np.sqrt(self.n_dims)
             # o_mat = np.repeat(np.eye(self.n_obs_dims)[None], self.batch_size, axis=0)
 
         xs_all = []
         for _ in range(self.length):
-            xs = o_mat @ zs + np.random.randn(self.batch_size, self.n_obs_dims, 1) * np.sqrt(self.o_noise / self.n_obs_dims)
-            zs = t_mat @ zs + np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.t_noise / self.n_dims)
+            if self.noise_dist == 'cauchy':
+                o_samp = np.random.randn(self.batch_size, self.n_obs_dims, 1) * np.sqrt(self.o_noise / self.n_obs_dims)
+                # o_samp = np.random.standard_cauchy(size=(self.batch_size, self.n_obs_dims, 1)) * self.o_noise / self.n_obs_dims
+                t_samp = np.random.standard_cauchy(size=(self.batch_size, self.n_dims, 1)) * np.sqrt(self.t_noise / self.n_obs_dims)
+            elif self.noise_dist == 'half':
+                var_adjust = (1 - (2 / np.pi))
+
+                o_samp = np.random.randn(self.batch_size, self.n_obs_dims, 1) * np.sqrt(self.o_noise / self.n_obs_dims)
+                t_samp = np.abs(np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.t_noise / self.n_dims)) / np.sqrt(var_adjust)
+
+            elif self.noise_dist == 'gauss':
+                o_samp = np.random.randn(self.batch_size, self.n_obs_dims, 1) * np.sqrt(self.o_noise / self.n_obs_dims)
+                t_samp = np.random.randn(self.batch_size, self.n_dims, 1) * np.sqrt(self.t_noise / self.n_dims)
+            else:
+                raise ValueError(f'unrecognized noise_dist={self.noise_dist}')
+
+            xs = o_mat @ zs + o_samp
+            zs = t_mat @ zs + t_samp
             xs_all.append(xs)
         
         xs_all = np.stack(xs_all, axis=1)[...,0]
 
         if self.mode == 'cheat':
             return xs_all, zs_init
-        elif self.mode == 'ac':
+        elif self.mode == 'ac': # TODO: remove observation matrix from input
             assert len(t_mat.shape) == 3
 
             if self.n_snaps is not None:
@@ -154,7 +176,7 @@ def mat_vec_prod(M, v):
         return np.einsum('bij,jb->ib', M, v)
 
 
-def pred_kalman(xs, task, A=None, C=None, return_mat=False):
+def pred_kalman(xs, task, A=None, C=None, t_noise=None, o_noise=None, return_mat=False):
     I = np.eye(task.n_dims)
     Io = np.eye(task.n_obs_dims)
 
@@ -162,8 +184,14 @@ def pred_kalman(xs, task, A=None, C=None, return_mat=False):
         A = task.t_mat
         C = task.o_mat
 
-    S_u = I * task.t_noise / task.n_dims
-    S_w = Io * task.o_noise / task.n_obs_dims
+    if t_noise is None:
+        t_noise = task.t_noise
+
+    if o_noise is None:
+        o_noise = task.o_noise
+
+    S_u = I * t_noise / task.n_dims
+    S_w = Io * o_noise / task.n_obs_dims
 
     ba = np.zeros((task.n_dims, task.batch_size))
     Sa = S_u.copy()

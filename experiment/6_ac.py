@@ -21,7 +21,6 @@ from model.transformer import TransformerConfig, sinusoidal_init
 from task.filter import KalmanFilterTask, pred_kalman
 
 # <codecell>
-
 length = 16
 n_dims = 4
 n_obs_dims = 4
@@ -29,7 +28,7 @@ n_hidden = 256
 n_heads = 1
 n_layers = 2
 
-noise = 0.0001
+noise = 0.1
 
 seed = new_seed()
 
@@ -39,18 +38,19 @@ train_task = KalmanFilterTask(length=length,
                               n_obs_dims=n_obs_dims, 
                               n_tasks=None, 
                               n_dims=n_dims, 
-                              t_noise=noise, 
-                              o_noise=noise, 
+                              t_noise=1, 
+                              o_noise=0.01, 
                               seed=seed, 
+                              noise_dist='half',
                               max_sval=1)
 
 
 config = TransformerConfig(n_layers=n_layers,
                            n_hidden=n_hidden,
-                           pos_emb=False,
+                           pos_emb=True,
                            n_mlp_layers=2,
                            n_heads=n_heads,
-                           layer_norm=False,
+                           layer_norm=True,
                            residual_connections=True,
                            freeze_emb=False,
                            return_final_logits_only=False,
@@ -59,13 +59,13 @@ config = TransformerConfig(n_layers=n_layers,
 state, hist = train(config,
                     data_iter=iter(train_task), 
                     test_every=1000,
-                    train_iters=5_000, 
+                    train_iters=10_000, 
                     seed=None)
 
 
 # <codecell>
 train_task.batch_size = 512
-train_task.length = 64
+train_task.length = 32
 
 xs = next(train_task)
 A = xs[:,:n_dims,n_obs_dims:]
@@ -76,7 +76,7 @@ pred = state.apply_fn({'params': state.params}, xs)
 pred = pred[:,:-1]
 
 xs_k = xs_vals
-pred_k, true_mse = pred_kalman(xs_k, train_task, A=A, C=C)
+pred_k, true_mse = pred_kalman(xs_k, train_task, A=A, C=C, t_noise=1)
 xs_k = xs_k[:,1:]
 pred_k = pred_k[:,:-1]
 
@@ -91,20 +91,46 @@ kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
 
 start_idx = 1
 true_mse = np.array(true_mse)
-plt.plot(pred_mse[start_idx:], '--o', label='Transformer (est A)', alpha=0.7, color='C0')
-plt.plot(kalman_mse[start_idx:], '--o', label='Kalman (est A)', alpha=0.7, color='C1')
+plt.plot(pred_mse[start_idx:], '--o', label='Transformer', alpha=0.7, color='C0')
+plt.plot(kalman_mse[start_idx:], '--o', label='Kalman', alpha=0.7, color='C1')
 plt.plot(zero_mse[start_idx:], '--o', label='Zero', alpha=0.7, color='C8')
 plt.plot(true_mse[start_idx:], '--', label='Kalman Var', alpha=0.7, color='red')
 
 plt.axvline(x=14, linestyle='dashed', color='gray')
 
 plt.legend(bbox_to_anchor=(1,1))
-plt.yscale('log')
+# plt.yscale('log')
 plt.xlabel('Time')
 plt.ylabel('MSE')
 plt.tight_layout()
 
-# plt.savefig('fig/ac_low_noise_a3_c3_estA_low_snaps.png')
+plt.savefig('fig/a_half_norm_noise.png')
+
+# <codecell>
+from scipy.stats import ortho_group as ortho_group
+
+x = np.random.randn(4, 1) / np.sqrt(4)
+M = ortho_group.rvs(4)
+
+xs = [x]
+for _ in range(100):
+    x = M @ x + np.random.randn(*x.shape) * 0.1
+    xs.append(x)
+
+xs = np.array(xs)
+norms = np.linalg.norm(xs, axis=1)
+
+
+plt.plot(norms, 'o--')
+
+# <codecell>
+from scipy.stats import norm, cauchy
+fac = 0.5
+
+xs = np.linspace(-6 * fac, 6 * fac, 50)
+
+plt.plot(norm.pdf(xs, scale=2 * fac))
+plt.plot(cauchy.pdf(xs, scale=2 * fac))
 
 # <codecell>
 df = collate_dfs('remote/6_ac/generalize/')
@@ -128,6 +154,8 @@ df
 
 
 # <codecell>
+skip_idx = 1
+
 def extract_plot_vals(row):
     time_len = len(row['info']['pred_mse'])
 
@@ -148,16 +176,17 @@ def extract_plot_vals(row):
     return pd.Series([
         row['name'],
         row['config']['n_layers'],
+        row['config']['n_mlp_layers'],
         row['config']['n_heads'],
         row['train_task'].n_snaps if row['train_task'].n_snaps is not None else 0,
         row['train_task'].t_noise,
         row['train_task'].n_obs_dims,
-        row['info']['pred_mse'],
-        row['info']['zero_mse'],
-        kalman_mse,
-        kalman_true_mse[:-1],
-        np.arange(time_len)
-    ], index=['name', 'n_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
+        row['info']['pred_mse'][skip_idx:],
+        row['info']['zero_mse'][skip_idx:],
+        kalman_mse[skip_idx:],
+        kalman_true_mse[skip_idx:-1],
+        np.arange(time_len)[skip_idx:]
+    ], index=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
 
 tqdm.pandas(desc='kalman read')
 
@@ -167,7 +196,7 @@ plot_df
 plot_df = plot_df \
             .reset_index(drop=True) \
             .explode(['pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time']) \
-            .melt(id_vars=['name', 'n_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'time'], var_name='mse_type', value_name='mse')
+            .melt(id_vars=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'time'], var_name='mse_type', value_name='mse')
 plot_df['mse'] = plot_df['mse'].astype(float)
 
 plot_df
@@ -176,10 +205,29 @@ plot_df
 mdf = plot_df.copy()
 
 mdf = mdf[
-    (mdf['n_snaps'] == 16)
-    & (mdf['noise'] == 0.1)
-    & (mdf['n_obs_dims'] == 16)
+    (mdf['n_snaps'] == 4)
+    & (mdf['noise'] == 0.01)
+    & (mdf['n_obs_dims'] == 4)
+    & (mdf['n_mlp_layers'] == 0)
 ]
 
-gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line')
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line', marker='o', height=3, aspect=1.2, alpha=0.8)
 gs.set(yscale='log')
+
+plt.savefig('fig/ac_head_layer_sweep_med_noise.png')
+
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['noise'] == 0.001)
+    & (mdf['n_heads'] == 1)
+    & (mdf['n_layers'] == 2)
+    & (mdf['n_mlp_layers'] == 0)
+]
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_snaps', row='n_obs_dims', kind='line', marker='o', height=3, aspect=1.2, alpha=0.8, facet_kws={'sharey': False})
+gs.set(yscale='log')
+
+plt.savefig('fig/ac_snaps_obs_sweep_mlp.png')
+

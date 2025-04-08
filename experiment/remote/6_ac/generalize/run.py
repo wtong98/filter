@@ -20,56 +20,58 @@ print('RUN ID', run_id)
 
 run_split = 12
 
-train_iters = 20_000
+train_iters = 50_000
 # n_layers = [1, 2, 4]
-n_layers = [1, 2, 4]
+n_layers = [2, 4, 8, 16]
 n_widths = [512]
 # n_heads = [1, 2]
-n_heads = [1, 2]
-n_mlp_layers = [0, 2]
+n_heads = [1, 2, 4]
 
-noises = [0.001, 0.01, 0.1]
-lengths = [16]
+noises = [0.1]
+lengths = [16, 64]
 
-pos_emb = [False]
+pos_emb = [False, True]
 n_tasks = [None]
 
-n_snaps = [None, 4, 16]
-n_obs_dims = [2, 4]
-n_dims = 4
+n_snaps = [None]
+n_obs_dims = [1, 4, 16]
+n_dims = 16
 
 ### START TEST CONFIGS
-# n_dims = 16
-# length = 8
-
 # run_split = 1
 
-# train_iters = 50
-# n_layers = [1]
+# train_iters = 500
+# # n_layers = [1, 2, 4]
+# n_layers = [2]
 # n_widths = [512]
+# # n_heads = [1, 2]
 # n_heads = [1]
 
-# noises = [0.001]
+# noises = [0.1]
 # lengths = [16]
 
+# pos_emb = [False]
+# n_tasks = [None]
+
 # n_snaps = [None]
-# n_obs_dims = [4]
+# n_obs_dims = [1]
+# n_dims = 16
 ### END TEST CONFIGS
 
 all_cases = []
 
-for n_task, noise, n_head, n_width, n_layer, n_mlp_layer, length, n_snap, n_obs_dim \
-    in itertools.product(n_tasks, noises, n_heads, n_widths, n_layers, n_mlp_layers, lengths, n_snaps, n_obs_dims):
+for pe, n_task, noise, n_head, n_width, n_layer, length, n_snap, n_obs_dim \
+    in itertools.product(pos_emb, n_tasks, noises, n_heads, n_widths, n_layers, lengths, n_snaps, n_obs_dims):
 
     seed = new_seed()
     all_cases.extend([
         Case('Transformer',
             TransformerConfig(n_layers=n_layer,
                             n_hidden=n_width,
-                            pos_emb=False,
-                            n_mlp_layers=n_mlp_layer,
+                            pos_emb=pe,
+                            n_mlp_layers=2,
                             n_heads=n_head,
-                            layer_norm=False,
+                            layer_norm=True,
                             residual_connections=True,
                             freeze_emb=False,
                             return_final_logits_only=False,
