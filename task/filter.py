@@ -212,7 +212,7 @@ def pred_kalman(xs, task, A=None, C=None, t_noise=None, o_noise=None, return_mat
         ba = mat_vec_prod(A, bp)
         Sa = A @ Sp @ tp(A) + S_u
 
-        true_mse = np.trace(C @ Sa @ tp(C) + S_w, axis1=-2, axis2=-1).mean() / task.n_dims
+        true_mse = np.trace(C @ Sa @ tp(C) + S_w, axis1=-2, axis2=-1).mean() / task.n_obs_dims
 
         all_true_mse.append(true_mse)
 

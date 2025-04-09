@@ -22,7 +22,7 @@ from task.filter import KalmanFilterTask, pred_kalman
 
 # <codecell>
 length = 16
-n_dims = 4
+n_dims = 8
 n_obs_dims = 4
 n_hidden = 256
 n_heads = 1
@@ -41,13 +41,13 @@ train_task = KalmanFilterTask(length=length,
                               t_noise=1, 
                               o_noise=0.01, 
                               seed=seed, 
-                              noise_dist='half',
+                              noise_dist='gauss',
                               max_sval=1)
 
 
 config = TransformerConfig(n_layers=n_layers,
                            n_hidden=n_hidden,
-                           pos_emb=True,
+                           pos_emb=False,
                            n_mlp_layers=2,
                            n_heads=n_heads,
                            layer_norm=True,
@@ -178,6 +178,7 @@ def extract_plot_vals(row):
         row['config']['n_layers'],
         row['config']['n_mlp_layers'],
         row['config']['n_heads'],
+        row['config']['pos_emb'],
         row['train_task'].n_snaps if row['train_task'].n_snaps is not None else 0,
         row['train_task'].t_noise,
         row['train_task'].n_obs_dims,
@@ -186,17 +187,18 @@ def extract_plot_vals(row):
         kalman_mse[skip_idx:],
         kalman_true_mse[skip_idx:-1],
         np.arange(time_len)[skip_idx:]
-    ], index=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
+    ], index=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'pos_emb', 'n_snaps', 'noise', 'n_obs_dims', 'pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
 
 tqdm.pandas(desc='kalman read')
 
 plot_df = df.progress_apply(extract_plot_vals, axis=1)
 plot_df
 
+# <codecell>
 plot_df = plot_df \
             .reset_index(drop=True) \
             .explode(['pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time']) \
-            .melt(id_vars=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'n_snaps', 'noise', 'n_obs_dims', 'time'], var_name='mse_type', value_name='mse')
+            .melt(id_vars=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'pos_emb', 'n_snaps', 'noise', 'n_obs_dims', 'time'], var_name='mse_type', value_name='mse')
 plot_df['mse'] = plot_df['mse'].astype(float)
 
 plot_df
@@ -205,29 +207,28 @@ plot_df
 mdf = plot_df.copy()
 
 mdf = mdf[
-    (mdf['n_snaps'] == 4)
-    & (mdf['noise'] == 0.01)
-    & (mdf['n_obs_dims'] == 4)
-    & (mdf['n_mlp_layers'] == 0)
+    (mdf['n_snaps'] == 0)
+    & (mdf['noise'] == 0.1)
+    & (mdf['n_obs_dims'] == 16)
+    & (mdf['pos_emb'] == False)
 ]
 
-gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line', marker='o', height=3, aspect=1.2, alpha=0.8)
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
 gs.set(yscale='log')
 
-plt.savefig('fig/ac_head_layer_sweep_med_noise.png')
+plt.savefig('fig/ac_big_sweep_nope.png')
 
 # <codecell>
 mdf = plot_df.copy()
 
 mdf = mdf[
-    (mdf['noise'] == 0.001)
-    & (mdf['n_heads'] == 1)
-    & (mdf['n_layers'] == 2)
-    & (mdf['n_mlp_layers'] == 0)
+    (mdf['noise'] == 0.1)
+    & (mdf['n_heads'] == 4)
+    & (mdf['n_layers'] == 8)
 ]
 
-gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_snaps', row='n_obs_dims', kind='line', marker='o', height=3, aspect=1.2, alpha=0.8, facet_kws={'sharey': False})
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='pos_emb', row='n_obs_dims', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
 gs.set(yscale='log')
 
-plt.savefig('fig/ac_snaps_obs_sweep_mlp.png')
+plt.savefig('fig/ac_big_sweep_pe_obs.png')
 

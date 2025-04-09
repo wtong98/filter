@@ -22,7 +22,7 @@ run_split = 12
 
 train_iters = 50_000
 # n_layers = [1, 2, 4]
-n_layers = [2, 4, 8, 16]
+n_layers = [2, 4, 8]
 n_widths = [512]
 # n_heads = [1, 2]
 n_heads = [1, 2, 4]
@@ -41,10 +41,8 @@ n_dims = 16
 # run_split = 1
 
 # train_iters = 500
-# # n_layers = [1, 2, 4]
 # n_layers = [2]
 # n_widths = [512]
-# # n_heads = [1, 2]
 # n_heads = [1]
 
 # noises = [0.1]
@@ -85,7 +83,8 @@ for pe, n_task, noise, n_head, n_width, n_layer, length, n_snap, n_obs_dim \
                                         o_noise=noise,
                                         mode='ac',
                                         n_snaps=n_snap,
-                                        seed=seed)
+                                        seed=seed),
+            info={'length': length}
         )
     ])
 
@@ -97,7 +96,7 @@ for case in tqdm(all_cases):
 
 test_tasks = [c.train_task for c in all_cases]
 for task in test_tasks:
-    task.length = 64
+    task.length = 128
 
 eval_cases(all_cases, eval_task=test_tasks)
 
