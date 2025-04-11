@@ -16,6 +16,7 @@ class KalmanFilterTask:
                  mode=None, n_tasks=1, n_snaps=None,
                  max_sval=1, o_mult=1, 
                  t_noise=0.05, o_noise=0.05, noise_dist='gauss',
+                 nonlin=None,
                  batch_size=128, seed=None) -> None:
         
         self.length = length
@@ -29,6 +30,7 @@ class KalmanFilterTask:
         self.t_noise = t_noise
         self.o_noise = o_noise
         self.noise_dist = noise_dist
+        # self.nonlin = nonlin
         self.batch_size = batch_size
         self.seed = seed
 
@@ -87,6 +89,13 @@ class KalmanFilterTask:
 
             xs = o_mat @ zs + o_samp
             zs = t_mat @ zs + t_samp
+            # if self.nonlin is None:
+            #     zs = t_mat @ zs + t_samp
+            # elif self.nonlin == 'tanh':
+            #     zs = np.tanh(t_mat @ zs) + t_samp
+            # else:
+            #     raise ValueError(f'unrecognized nonlin={self.nonlin}')
+
             xs_all.append(xs)
         
         xs_all = np.stack(xs_all, axis=1)[...,0]

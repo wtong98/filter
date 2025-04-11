@@ -25,16 +25,16 @@ train_iters = 50_000
 n_layers = [2, 4, 8]
 n_widths = [512]
 # n_heads = [1, 2]
-n_heads = [1, 2, 4]
+n_heads = [2, 4]
 
 noises = [0.1]
-lengths = [16, 64]
+lengths = [64]
 
 pos_emb = [False, True]
 n_tasks = [None]
 
-n_snaps = [None]
-n_obs_dims = [1, 4, 16]
+n_snaps = [None, 4, 16, 64, 256]
+n_obs_dims = [16]
 n_dims = 16
 
 ### START TEST CONFIGS
