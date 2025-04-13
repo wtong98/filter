@@ -20,6 +20,8 @@ from train import *
 from model.transformer import TransformerConfig, sinusoidal_init
 from task.filter import KalmanFilterTask, pred_kalman
 
+set_theme()
+
 # <codecell>
 length = 16
 n_dims = 4
@@ -41,8 +43,8 @@ train_task = KalmanFilterTask(length=length,
                               t_noise=1, 
                               o_noise=0.01, 
                               seed=seed, 
-                              noise_dist='gauss',
-                              nonlin='tanh',
+                              noise_dist='half',
+                            #   nonlin='tanh',
                               max_sval=1)
 
 
@@ -92,20 +94,20 @@ kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
 
 start_idx = 1
 true_mse = np.array(true_mse)
-plt.plot(pred_mse[start_idx:], '--o', label='Transformer', alpha=0.7, color='C0')
-plt.plot(kalman_mse[start_idx:], '--o', label='Kalman', alpha=0.7, color='C1')
-plt.plot(zero_mse[start_idx:], '--o', label='Zero', alpha=0.7, color='C8')
-plt.plot(true_mse[start_idx:], '--', label='Kalman Var', alpha=0.7, color='red')
+plt.plot(pred_mse[start_idx:], '--o', label='Transformer (NoPE)', alpha=0.7, color='C9')
+plt.plot(kalman_mse[start_idx:], '--o', label='Kalman Filter', alpha=0.7, color='C1')
+plt.plot(true_mse[start_idx:], '--', label='Kalman Est. Var.', alpha=0.7, color='red')
+plt.plot(zero_mse[start_idx:], '--o', label='Zero Predictor', alpha=0.7, color='C8')
 
 plt.axvline(x=14, linestyle='dashed', color='gray')
 
-plt.legend(bbox_to_anchor=(1,1))
 # plt.yscale('log')
 plt.xlabel('Time')
 plt.ylabel('MSE')
 plt.tight_layout()
+plt.legend(bbox_to_anchor=(1,1))
 
-plt.savefig('fig/a_tanh_halved.png')
+plt.savefig('fig/final_apr13/a_half_norm_noise.png', bbox_inches='tight')
 
 # <codecell>
 from scipy.stats import ortho_group as ortho_group
@@ -219,7 +221,7 @@ mdf = mdf[
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
 # gs.set(yscale='log')
 
-plt.savefig('fig/ac_big_sweep_nope_lin_scale.png')
+# plt.savefig('fig/ac_big_sweep_nope_lin_scale.png')
 
 # <codecell>
 mdf = plot_df.copy()
@@ -229,10 +231,103 @@ mdf = mdf[
     & (mdf['n_heads'] == 4)
     & (mdf['n_layers'] == 4)
     & (mdf['n_obs_dims'] == 16)
+    & (mdf['n_snaps'] == 0)
 ]
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='pos_emb', row='length', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5, facet_kws={'sharey': False})
 # gs.set(yscale='log')
 
-plt.savefig('fig/ac_big_sweep_pe_length_lin_scale.png')
+# plt.savefig('fig/ac_big_sweep_pe_length_lin_scale.png')
 
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['noise'] == 0.1)
+    & (mdf['n_heads'] == 4)
+    & (mdf['n_layers'] == 4)
+    & (mdf['n_obs_dims'] == 16)
+    & (mdf['pos_emb'] == True)
+    & (mdf['time'] < 64)
+]
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_snaps', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
+gs.set(yscale='log')
+plt.savefig('fig/ac_big_sweep_snaps.png')
+
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['n_snaps'] == 0)
+    & (mdf['n_obs_dims'] == 16)
+    & (mdf['pos_emb'] == True)
+    & (mdf['time'] < 64)
+    & (mdf['mse_type'] != 'kalman_true_mse')
+    & (mdf['n_heads'] == 4)
+    & (mdf['n_layers'] == 4)
+]
+
+mdf = mdf.replace({
+    'pred_mse': 'Transformer (PE)',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman Filter'
+})
+
+g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Kalman Filter', 'Zero Predictor'])
+g.legend().set_title(None)
+
+g.set_xlabel('Time')
+g.set_ylabel('MSE')
+
+g.figure.tight_layout()
+sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
+g.figure.savefig('fig/final_apr13/pe.png', bbox_inches='tight')
+
+
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['n_snaps'] == 0)
+    & (mdf['n_obs_dims'] == 16)
+    & (mdf['mse_type'] != 'kalman_true_mse')
+    & (mdf['n_heads'] == 4)
+    & (mdf['n_layers'] == 4)
+]
+
+mdf.loc[
+    (mdf['mse_type'] == 'pred_mse') 
+    & (mdf['pos_emb'] == False),
+    'mse_type'
+] = 'pred_mse_nope'
+
+mdf.loc[
+    (mdf['mse_type'] == 'pred_mse') 
+    & (mdf['pos_emb'] == True),
+    'mse_type'
+] = 'pred_mse_pe'
+
+mdf = mdf.replace({
+    'pred_mse_pe': 'Transformer (PE)',
+    'pred_mse_nope': 'Transformer (NoPE)',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman Filter'
+})
+
+
+g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C9', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Transformer (NoPE)', 'Kalman Filter', 'Zero Predictor'])
+g.legend().set_title(None)
+
+g.set_xlabel('Time')
+g.set_ylabel('MSE')
+
+g.set_ylim((0.01, 0.12))
+
+g.figure.tight_layout()
+sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
+
+g.axvline(x=63, linestyle='dashed', color='gray')
+plt.text(58, 0.1, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
+
+g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
