@@ -139,23 +139,6 @@ plt.plot(cauchy.pdf(xs, scale=2 * fac))
 df = collate_dfs('remote/6_ac/generalize/')
 df
 
-# # <codecell>
-# row = df.iloc[1]
-# task = row['train_task']
-# xs = next(task)
-
-# A = xs[:,:task.n_dims,task.n_obs_dims:]
-# C = xs[:,task.n_dims:(task.n_dims+task.n_obs_dims),task.n_obs_dims:]
-# xs_vals = xs[:,(task.n_dims + task.n_obs_dims):, :task.n_obs_dims]
-
-# xs_k = xs_vals
-# pred_k, true_mse = pred_kalman(xs_k, task, A=A, C=C)
-# xs_k = xs_k[:,1:]
-# pred_k = pred_k[:,:-1]
-
-# kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
-
-
 # <codecell>
 skip_idx = 0
 
@@ -331,3 +314,117 @@ g.axvline(x=63, linestyle='dashed', color='gray')
 plt.text(58, 0.1, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
 
 g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
+
+
+# <codecell>
+df = collate_dfs('remote/6_ac/noise/')
+df
+
+# <codecell>
+skip_idx = 0
+
+def extract_plot_vals(row):
+    time_len = len(row['info']['pred_mse'])
+
+    task = row['train_task']
+    xs = next(task)
+
+    A = xs[:,:task.n_dims,task.n_obs_dims:]
+    C = xs[:,task.n_dims:(task.n_dims+task.n_obs_dims),task.n_obs_dims:]
+    xs_vals = xs[:,(task.n_dims + task.n_obs_dims):, :task.n_obs_dims]
+
+    xs_k = xs_vals
+    pred_k, kalman_true_mse = pred_kalman(xs_k, task, A=A, C=C)
+    xs_k = xs_k[:,1:]
+    pred_k = pred_k[:,:-1]
+
+    kalman_mse = ((xs_k - pred_k)**2).mean(axis=(0, -1))
+
+    return pd.Series([
+        row['name'],
+        row['config']['n_layers'],
+        row['config']['n_mlp_layers'],
+        row['config']['n_heads'],
+        row['config']['pos_emb'],
+        row['train_task'].n_snaps if row['train_task'].n_snaps is not None else 0,
+        row['train_task'].t_noise,
+        row['train_task'].n_obs_dims,
+        row['info']['length'],
+        row['info']['pred_mse'][skip_idx:],
+        row['info']['zero_mse'][skip_idx:],
+        kalman_mse[skip_idx:],
+        kalman_true_mse[skip_idx:-1],
+        np.arange(time_len)[skip_idx:]
+    ], index=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'pos_emb', 'n_snaps', 'noise', 'n_obs_dims', 'length', 'pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time'])
+
+tqdm.pandas(desc='kalman read')
+
+plot_df = df.progress_apply(extract_plot_vals, axis=1)
+plot_df
+
+# <codecell>
+plot_df = plot_df \
+            .reset_index(drop=True) \
+            .explode(['pred_mse', 'zero_mse', 'kalman_mse', 'kalman_true_mse', 'time']) \
+            .melt(id_vars=['name', 'n_layers', 'n_mlp_layers', 'n_heads', 'pos_emb', 'n_snaps', 'noise', 'n_obs_dims', 'length', 'time'], var_name='mse_type', value_name='mse')
+plot_df['mse'] = plot_df['mse'].astype(float)
+
+plot_df
+
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['n_snaps'] == 0)
+    & (mdf['n_obs_dims'] == 16)
+    & (mdf['pos_emb'] == False)
+    & (mdf['length'] == 64)
+]
+
+gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
+
+# <codecell>
+mdf = plot_df.copy()
+
+mdf = mdf[
+    (mdf['n_snaps'] == 0)
+    & (mdf['n_obs_dims'] == 16)
+    & (mdf['mse_type'] != 'kalman_true_mse')
+    & (mdf['n_heads'] == 4)
+    & (mdf['n_layers'] == 4)
+]
+
+mdf.loc[
+    (mdf['mse_type'] == 'pred_mse') 
+    & (mdf['pos_emb'] == False),
+    'mse_type'
+] = 'pred_mse_nope'
+
+mdf.loc[
+    (mdf['mse_type'] == 'pred_mse') 
+    & (mdf['pos_emb'] == True),
+    'mse_type'
+] = 'pred_mse_pe'
+
+mdf = mdf.replace({
+    'pred_mse_pe': 'Transformer (PE)',
+    'pred_mse_nope': 'Transformer (NoPE)',
+    'zero_mse': 'Zero Predictor',
+    'kalman_mse': 'Kalman Filter'
+})
+
+
+g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C9', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Transformer (NoPE)', 'Kalman Filter', 'Zero Predictor'])
+g.legend().set_title(None)
+
+g.set_xlabel('Time')
+g.set_ylabel('MSE')
+
+
+g.figure.tight_layout()
+sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
+
+g.axvline(x=63, linestyle='dashed', color='gray')
+plt.text(58, 0.1, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
+
+# g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')

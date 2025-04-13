@@ -27,7 +27,7 @@ n_widths = [512]
 # n_heads = [1, 2]
 n_heads = [2, 4]
 
-noises = [None]
+noises = [0.1, 1]
 lengths = [64]
 
 pos_emb = [False, True]
@@ -79,7 +79,7 @@ for pe, n_task, noise, n_head, n_width, n_layer, length, n_snap, n_obs_dim \
                                         n_tasks=n_task, 
                                         n_dims=n_dims, 
                                         n_obs_dims=n_obs_dim,
-                                        t_noise=1, 
+                                        t_noise=noise, 
                                         o_noise=0.01,
                                         noise_dist='half',
                                         mode='ac',
