@@ -27,7 +27,7 @@ n_widths = [512]
 # n_heads = [1, 2]
 n_heads = [2, 4]
 
-noises = [0.1, 1]
+noises = [0.1, 0.5, 1]
 lengths = [64]
 
 pos_emb = [False, True]
