@@ -197,7 +197,7 @@ mdf = mdf[
     (mdf['n_snaps'] == 0)
     & (mdf['noise'] == 0.1)
     & (mdf['n_obs_dims'] == 16)
-    & (mdf['pos_emb'] == False)
+    & (mdf['pos_emb'] == True)
     & (mdf['length'] == 64)
 ]
 
@@ -236,7 +236,7 @@ mdf = mdf[
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_snaps', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
 gs.set(yscale='log')
-plt.savefig('fig/ac_big_sweep_snaps.png')
+# plt.savefig('fig/ac_big_sweep_snaps.png')
 
 # <codecell>
 mdf = plot_df.copy()
@@ -300,20 +300,130 @@ mdf = mdf.replace({
 
 
 g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C9', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Transformer (NoPE)', 'Kalman Filter', 'Zero Predictor'])
+g.figure.set_size_inches(3.5, 2.4)
 g.legend().set_title(None)
 
 g.set_xlabel('Time')
 g.set_ylabel('MSE')
 
-g.set_ylim((0.01, 0.12))
+g.set_ylim((0.01, 0.13))
 
 g.figure.tight_layout()
 sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
 
 g.axvline(x=63, linestyle='dashed', color='gray')
-plt.text(58, 0.1, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
+plt.text(57, 0.11, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
 
-g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
+# g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
+g.figure.savefig('fig/final_apr13/nope.svg', bbox_inches='tight')
+
+# <codecell>
+for n_heads, n_layers in itertools.product([2, 4], [2, 4]):
+    mdf = plot_df.copy()
+    mdf = mdf[
+        (mdf['n_snaps'] == 0)
+        & (mdf['n_obs_dims'] == 16)
+        & (mdf['mse_type'] != 'kalman_true_mse')
+        & (mdf['n_heads'] == n_heads)
+        & (mdf['n_layers'] == n_layers)
+    ]
+
+    mdf.loc[
+        (mdf['mse_type'] == 'pred_mse') 
+        & (mdf['pos_emb'] == False),
+        'mse_type'
+    ] = 'pred_mse_nope'
+
+    mdf.loc[
+        (mdf['mse_type'] == 'pred_mse') 
+        & (mdf['pos_emb'] == True),
+        'mse_type'
+    ] = 'pred_mse_pe'
+
+    mdf = mdf.replace({
+        'pred_mse_pe': 'Transformer (PE)',
+        'pred_mse_nope': 'Transformer (NoPE)',
+        'zero_mse': 'Zero Predictor',
+        'kalman_mse': 'Kalman Filter'
+    })
+
+
+    g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C9', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Transformer (NoPE)', 'Kalman Filter', 'Zero Predictor'])
+    g.figure.set_size_inches(3.3, 2.1)
+    g.legend().set_title(None)
+
+    g.set_xlabel('Time')
+    g.set_ylabel('MSE')
+
+    g.set_ylim((0.01, 0.15))
+
+    g.figure.tight_layout()
+    sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
+
+    g.axvline(x=63, linestyle='dashed', color='gray')
+    g.set_title(f'$H = {n_heads}, L = {n_layers}$')
+    # plt.text(57, 0.11, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
+
+    # g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
+    g.figure.savefig(f'fig/final_apr13/nope_{n_heads}_{n_layers}.svg', bbox_inches='tight')
+    plt.show()
+
+
+# <codecell>
+for n_snaps in [0, 4, 64, 256]:
+    mdf = plot_df.copy()
+    mdf = mdf[
+        (mdf['n_snaps'] == n_snaps)
+        & (mdf['n_obs_dims'] == 16)
+        & (mdf['mse_type'] != 'kalman_true_mse')
+        & (mdf['n_heads'] == 4)
+        & (mdf['n_layers'] == 4)
+    ]
+
+    mdf.loc[
+        (mdf['mse_type'] == 'pred_mse') 
+        & (mdf['pos_emb'] == False),
+        'mse_type'
+    ] = 'pred_mse_nope'
+
+    mdf.loc[
+        (mdf['mse_type'] == 'pred_mse') 
+        & (mdf['pos_emb'] == True),
+        'mse_type'
+    ] = 'pred_mse_pe'
+
+    mdf = mdf.replace({
+        'pred_mse_pe': 'Transformer (PE)',
+        'pred_mse_nope': 'Transformer (NoPE)',
+        'zero_mse': 'Zero Predictor',
+        'kalman_mse': 'Kalman Filter'
+    })
+
+
+    g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C9', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Transformer (NoPE)', 'Kalman Filter', 'Zero Predictor'])
+    g.figure.set_size_inches(3.3, 2.1)
+    g.legend().set_title(None)
+
+    g.set_xlabel('Time')
+    g.set_ylabel('MSE')
+
+    g.set_ylim((0.01, 0.12))
+
+    g.figure.tight_layout()
+    sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
+
+    g.axvline(x=63, linestyle='dashed', color='gray')
+    if n_snaps == 0:
+        n_snaps_render = '\infty'
+    else:
+        n_snaps_render = n_snaps
+    g.set_title(f'$s = {n_snaps_render}$')
+
+    # plt.text(57, 0.11, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
+
+    # g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
+    g.figure.savefig(f'fig/final_apr13/nope_{n_snaps}.svg', bbox_inches='tight')
+    plt.show()
 
 
 # <codecell>
@@ -379,6 +489,7 @@ mdf = mdf[
     & (mdf['n_obs_dims'] == 16)
     & (mdf['pos_emb'] == False)
     & (mdf['length'] == 64)
+    & (mdf['noise'] == 0.1)
 ]
 
 gs = sns.relplot(mdf, x='time', y='mse', hue='mse_type', col='n_layers', row='n_heads', kind='line', marker='o', height=3, aspect=1.5, alpha=0.5)
@@ -392,6 +503,7 @@ mdf = mdf[
     & (mdf['mse_type'] != 'kalman_true_mse')
     & (mdf['n_heads'] == 4)
     & (mdf['n_layers'] == 4)
+    & (mdf['noise'] == 1)
 ]
 
 mdf.loc[
@@ -415,6 +527,7 @@ mdf = mdf.replace({
 
 
 g = sns.lineplot(mdf, x='time', y='mse', hue='mse_type', palette=['C0', 'C9', 'C1', 'C8'], hue_order=['Transformer (PE)', 'Transformer (NoPE)', 'Kalman Filter', 'Zero Predictor'])
+g.figure.set_size_inches(3.5, 2.4)
 g.legend().set_title(None)
 
 g.set_xlabel('Time')
@@ -425,6 +538,7 @@ g.figure.tight_layout()
 sns.move_legend(g, 'lower left', bbox_to_anchor=(1,0))
 
 g.axvline(x=63, linestyle='dashed', color='gray')
-plt.text(58, 0.1, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
+plt.text(57, 0.32, 'train/test', rotation=90, va='center', color='gray', fontsize=9)
 
-# g.figure.savefig('fig/final_apr13/nope.png', bbox_inches='tight')
+# g.figure.savefig('fig/final_apr13/half_norm_noise.png', bbox_inches='tight')
+g.figure.savefig('fig/final_apr13/half_norm_noise.svg', bbox_inches='tight')
