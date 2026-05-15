@@ -4,6 +4,7 @@ __pycache__/
 *.pkl
 fig/
 task/dataset/
+*.pdf
 
 # ignore slurm logging outputs
 *.err

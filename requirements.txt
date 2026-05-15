@@ -1,7 +1,10 @@
 flax
+ipykernel
 jax
 matplotlib
 numpy
 pandas
+pytest
+scipy
 seaborn
 tqdm
