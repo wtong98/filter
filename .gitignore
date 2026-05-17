@@ -5,6 +5,7 @@ __pycache__/
 fig/
 task/dataset/
 *.pdf
+*.ipynb_checkpoints
 
 # ignore slurm logging outputs
 *.err

@@ -39,11 +39,9 @@ class KalmanFilterTask:
         if self.n_obs_dims is None:
             self.n_obs_dims = self.n_dims
 
-        # self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
-        # self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
-        self.t_mat = ortho_group.rvs(self.n_dims)
+        self.t_mat = self.rng.standard_normal((self.n_dims, self.n_dims))
+        self.t_mat = self.t_mat / np.linalg.norm(self.t_mat, ord=2) * self.max_sval
         self.o_mat = self.rng.standard_normal((self.n_obs_dims, self.n_dims)) / np.sqrt(n_dims) * self.o_mult
-        # self.o_mat = self.o_mat / np.linalg.norm(self.o_mat, ord=2) * self.max_sval
 
         self.rng = np.random.default_rng(None)
     

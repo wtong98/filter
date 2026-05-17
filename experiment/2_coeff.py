@@ -22,7 +22,6 @@ from task.filter import KalmanFilterTask, pred_kalman
 
 set_theme()
 
-# <codecell>
 length = 16
 n_dims = 32
 n_obs_dims = 32
@@ -352,7 +351,7 @@ for run_id in range(3):
     axs[run_id].set_title(name)
 
 fig.tight_layout()
-plt.savefig('fig/final_report/transformer_v_kalman.png')
+# plt.savefig('fig/final_report/transformer_v_kalman.png')
 
 # <codecell>
 plt.title('Abs Kalman Matrix')
